@@ -42,11 +42,27 @@ export function defaultBudgetMonth(date = new Date()): string {
   return current < TRACKING_START_MONTH ? TRACKING_START_MONTH : current
 }
 
-/** Prefer today if it falls in `ym`, otherwise the 1st of that month. */
+/** Prefer today if it falls in `ym`; if budgeting September while still in August, use today's day in September. */
 export function defaultDateInMonth(ym: string, date = new Date()): string {
   const current = yearMonthFromDate(date)
   if (current === ym) return todayISO(date)
+  if (ym >= TRACKING_START_MONTH && current < TRACKING_START_MONTH) {
+    const day = Math.min(date.getDate(), daysInMonth(ym))
+    return `${ym}-${String(day).padStart(2, '0')}`
+  }
   return `${ym}-01`
+}
+
+/** Map any pre-September date into September so spend counts toward the starting budget. */
+export function clampExpenseDate(dateISO: string, date = new Date()): string {
+  const startDay = `${TRACKING_START_MONTH}-01`
+  if (dateISO >= startDay) return dateISO
+  const rawDay = Number(dateISO.slice(8, 10))
+  const day = Math.min(
+    Number.isFinite(rawDay) && rawDay > 0 ? rawDay : date.getDate(),
+    daysInMonth(TRACKING_START_MONTH),
+  )
+  return `${TRACKING_START_MONTH}-${String(day).padStart(2, '0')}`
 }
 
 export function shiftDateISO(dateISO: string, deltaDays: number): string {

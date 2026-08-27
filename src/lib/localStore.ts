@@ -1,5 +1,5 @@
 import type { Expense, Household, Member, MonthlyBudget } from '../types'
-import { MEMBER_COLORS, TRACKING_START_MONTH, defaultBudgetMonth, uid } from './format'
+import { MEMBER_COLORS, TRACKING_START_MONTH, clampExpenseDate, defaultBudgetMonth, uid } from './format'
 
 const KEY = 'split-local-v1'
 const VAULT_KEY = 'split-local-vault-v1'
@@ -73,13 +73,17 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase()
 }
 
-/** Drop accidental pre-September seed budgets so they don't look like real history. */
+/** Move early expenses into September; drop only pre-September seed budgets. */
 function scrubPreTracking(state: LocalState): LocalState {
   const budgets = state.budgets.filter((b) => b.year_month >= TRACKING_START_MONTH)
-  const expenses = state.expenses.filter((e) => e.spent_on >= `${TRACKING_START_MONTH}-01`)
-  if (budgets.length === state.budgets.length && expenses.length === state.expenses.length) {
-    return state
-  }
+  const expenses = state.expenses.map((e) => ({
+    ...e,
+    spent_on: clampExpenseDate(e.spent_on),
+  }))
+  const changed =
+    budgets.length !== state.budgets.length ||
+    expenses.some((e, i) => e.spent_on !== state.expenses[i]?.spent_on)
+  if (!changed) return state
   return { ...state, budgets, expenses }
 }
 
@@ -87,7 +91,39 @@ export function loadLocal(): LocalState {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return empty()
-    return scrubPreTracking({ ...empty(), ...JSON.parse(raw) })
+    const parsed = scrubPreTracking({ ...empty(), ...JSON.parse(raw) })
+    localStorage.setItem(KEY, JSON.stringify(parsed))
+    if (parsed.session) persistCurrentToVault(parsed)
+
+    // Also migrate any vaulted accounts
+    const vault = loadVault()
+    let vaultChanged = false
+    for (const [email, entry] of Object.entries(vault)) {
+      const next = scrubPreTracking({
+        mode: 'local',
+        session: entry.session,
+        household: entry.household,
+        members: entry.members,
+        budgets: entry.budgets,
+        expenses: entry.expenses,
+      })
+      if (
+        next.expenses.some((e, i) => e.spent_on !== entry.expenses[i]?.spent_on) ||
+        next.budgets.length !== entry.budgets.length
+      ) {
+        vault[email] = {
+          session: next.session!,
+          household: next.household,
+          members: next.members,
+          budgets: next.budgets,
+          expenses: next.expenses,
+        }
+        vaultChanged = true
+      }
+    }
+    if (vaultChanged) saveVault(vault)
+
+    return parsed
   } catch {
     return empty()
   }
@@ -281,7 +317,7 @@ export function localAddExpense(input: {
     category: input.category,
     note: input.note,
     spent_by: input.spent_by,
-    spent_on: input.spent_on,
+    spent_on: clampExpenseDate(input.spent_on),
     created_by: state.session.userId,
     created_at: new Date().toISOString(),
   })

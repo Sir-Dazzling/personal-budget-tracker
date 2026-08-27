@@ -1,7 +1,14 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
-import { CATEGORIES, defaultBudgetMonth, defaultDateInMonth, formatNaira } from '../lib/format'
+import {
+  CATEGORIES,
+  TRACKING_START_MONTH,
+  clampExpenseDate,
+  defaultBudgetMonth,
+  defaultDateInMonth,
+  formatNaira,
+} from '../lib/format'
 
 export function AddExpensePage() {
   const { members, myMember, addExpense } = useApp()
@@ -20,6 +27,10 @@ export function AddExpensePage() {
       if (id) setSpentBy(id)
     }
   }, [spentBy, myMember, members])
+
+  useEffect(() => {
+    setSpentOn((d) => clampExpenseDate(d))
+  }, [])
 
   const parsed = useMemo(() => {
     const n = Number(String(amount).replace(/,/g, ''))
@@ -44,7 +55,7 @@ export function AddExpensePage() {
         category,
         note: note.trim(),
         spent_by: spentBy,
-        spent_on: spentOn,
+        spent_on: clampExpenseDate(spentOn),
       })
       navigate('/')
     } catch (err) {
@@ -114,10 +125,14 @@ export function AddExpensePage() {
           <input
             id="date"
             type="date"
+            min={`${TRACKING_START_MONTH}-01`}
             value={spentOn}
-            onChange={(e) => setSpentOn(e.target.value)}
+            onChange={(e) => setSpentOn(clampExpenseDate(e.target.value))}
             required
           />
+          <span className="hint">
+            Tracking starts September — August dates are saved as September (same day).
+          </span>
         </div>
 
         <div className="field">
