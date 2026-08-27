@@ -21,17 +21,17 @@ import {
   spendByMember,
 } from '../lib/analytics'
 import {
+  defaultBudgetMonth,
   formatNaira,
   formatYearMonth,
   shiftYearMonth,
-  yearMonthFromDate,
 } from '../lib/format'
 
 const CAT_COLORS = ['#0d4f3c', '#1a6b52', '#2c5f8a', '#c45c26', '#7a5c3a', '#4a6356', '#8aa899']
 
 export function DashboardPage() {
   const { expenses, members, budgets } = useApp()
-  const [ym, setYm] = useState(yearMonthFromDate())
+  const [ym, setYm] = useState(defaultBudgetMonth)
   const summary = monthSummary(expenses, ym, budgets)
   const daily = useMemo(() => spendByDay(expenses, ym), [expenses, ym])
   const byCat = useMemo(() => spendByCategory(expenses, ym), [expenses, ym])

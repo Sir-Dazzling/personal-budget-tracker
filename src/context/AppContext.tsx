@@ -21,7 +21,7 @@ import {
   loadLocal,
 } from '../lib/localStore'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
-import { MEMBER_COLORS, yearMonthFromDate } from '../lib/format'
+import { MEMBER_COLORS, defaultBudgetMonth } from '../lib/format'
 
 interface SessionUser {
   id: string
@@ -288,7 +288,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         await supabase.from('monthly_budgets').upsert(
           {
             household_id: mem.household_id,
-            year_month: yearMonthFromDate(),
+            year_month: defaultBudgetMonth(),
             amount_ngn: 200_000,
           },
           { onConflict: 'household_id,year_month' },

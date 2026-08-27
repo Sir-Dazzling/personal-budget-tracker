@@ -1,5 +1,5 @@
 import type { Expense, Household, Member, MonthlyBudget } from '../types'
-import { MEMBER_COLORS, uid, yearMonthFromDate } from './format'
+import { MEMBER_COLORS, TRACKING_START_MONTH, defaultBudgetMonth, uid } from './format'
 
 const KEY = 'split-local-v1'
 
@@ -23,11 +23,23 @@ function empty(): LocalState {
   }
 }
 
+/** Drop accidental pre-September seed budgets so they don't look like real history. */
+function scrubPreTracking(state: LocalState): LocalState {
+  const budgets = state.budgets.filter((b) => b.year_month >= TRACKING_START_MONTH)
+  const expenses = state.expenses.filter((e) => e.spent_on >= `${TRACKING_START_MONTH}-01`)
+  if (budgets.length === state.budgets.length && expenses.length === state.expenses.length) {
+    return state
+  }
+  const next = { ...state, budgets, expenses }
+  saveLocal(next)
+  return next
+}
+
 export function loadLocal(): LocalState {
   try {
     const raw = localStorage.getItem(KEY)
     if (!raw) return empty()
-    return { ...empty(), ...JSON.parse(raw) }
+    return scrubPreTracking({ ...empty(), ...JSON.parse(raw) })
   } catch {
     return empty()
   }
@@ -87,7 +99,7 @@ export function localCreateHousehold(name: string, displayName: string): LocalSt
     display_name: 'Brother',
     color: MEMBER_COLORS[1],
   })
-  const ym = yearMonthFromDate()
+  const ym = defaultBudgetMonth()
   state.budgets = [
     {
       id: uid(),

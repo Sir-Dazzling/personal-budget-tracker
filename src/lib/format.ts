@@ -34,6 +34,45 @@ export function yearMonthFromDate(date = new Date()): string {
   return `${y}-${m}`
 }
 
+/** Tracking starts September 2026 — before that, open on September. */
+export const TRACKING_START_MONTH = '2026-09'
+
+export function defaultBudgetMonth(date = new Date()): string {
+  const current = yearMonthFromDate(date)
+  return current < TRACKING_START_MONTH ? TRACKING_START_MONTH : current
+}
+
+/** Prefer today if it falls in `ym`, otherwise the 1st of that month. */
+export function defaultDateInMonth(ym: string, date = new Date()): string {
+  const current = yearMonthFromDate(date)
+  if (current === ym) return todayISO(date)
+  return `${ym}-01`
+}
+
+export function shiftDateISO(dateISO: string, deltaDays: number): string {
+  const [y, m, d] = dateISO.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  dt.setDate(dt.getDate() + deltaDays)
+  return todayISO(dt)
+}
+
+export function formatDayLabel(dateISO: string): string {
+  const [y, m, d] = dateISO.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('en-NG', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  })
+}
+
+export function todayISO(date = new Date()): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
 export function parseYearMonth(ym: string): Date {
   const [y, m] = ym.split('-').map(Number)
   return new Date(y, m - 1, 1)
@@ -71,12 +110,4 @@ export function budgetStatus(spent: number, budget: number): BudgetStatus {
 
 export function uid(): string {
   return crypto.randomUUID()
-}
-
-export function todayISO(): string {
-  const d = new Date()
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${y}-${m}-${day}`
 }

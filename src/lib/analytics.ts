@@ -1,5 +1,6 @@
 import type { Expense, MonthSummary, MonthlyBudget } from '../types'
 import {
+  TRACKING_START_MONTH,
   budgetStatus,
   dayOfMonth,
   daysInMonth,
@@ -7,6 +8,10 @@ import {
   shiftYearMonth,
   yearMonthFromDate,
 } from './format'
+
+export function expensesOnDate(expenses: Expense[], dateISO: string): Expense[] {
+  return expenses.filter((e) => e.spent_on === dateISO)
+}
 
 export function expensesInMonth(expenses: Expense[], yearMonth: string): Expense[] {
   return expenses.filter((e) => e.spent_on.startsWith(yearMonth))
@@ -31,11 +36,13 @@ function earliestRelevantMonth(
   const months: string[] = []
   for (const e of expenses) {
     const ym = e.spent_on.slice(0, 7)
-    if (ym < beforeYm) months.push(ym)
+    if (ym < beforeYm && ym >= TRACKING_START_MONTH) months.push(ym)
   }
   if (typeof budgets !== 'function') {
     for (const b of budgets) {
-      if (b.year_month < beforeYm) months.push(b.year_month)
+      if (b.year_month < beforeYm && b.year_month >= TRACKING_START_MONTH) {
+        months.push(b.year_month)
+      }
     }
   }
   if (months.length === 0) return null
@@ -45,15 +52,18 @@ function earliestRelevantMonth(
 
 /**
  * Unused balance carried into `yearMonth` from prior months.
- * Remaining for a month = max(0, budget + carryIn - spent); that becomes next month's carry-in.
+ * Nothing carries into the tracking start month (September 2026) — August is ignored.
  */
 export function carryoverInto(
   expenses: Expense[],
   yearMonth: string,
   budgets: BudgetLookup,
 ): number {
-  const start = earliestRelevantMonth(expenses, budgets, yearMonth)
+  if (yearMonth <= TRACKING_START_MONTH) return 0
+
+  let start = earliestRelevantMonth(expenses, budgets, yearMonth)
   if (!start) return 0
+  if (start < TRACKING_START_MONTH) start = TRACKING_START_MONTH
 
   let carry = 0
   let ym = start

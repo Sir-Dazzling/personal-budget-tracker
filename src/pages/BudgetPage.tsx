@@ -1,17 +1,29 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useApp } from '../context/AppContext'
 import { carryoverInto } from '../lib/analytics'
-import { formatNaira, formatYearMonth, yearMonthFromDate } from '../lib/format'
+import {
+  defaultBudgetMonth,
+  formatNaira,
+  formatYearMonth,
+  shiftYearMonth,
+} from '../lib/format'
 
 export function BudgetPage() {
   const { budgets, expenses, setBudget, members, renameMember, household, cloud } = useApp()
-  const ym = yearMonthFromDate()
-  const current = budgets.find((b) => b.year_month === ym)?.amount_ngn ?? 0
+  const [ym, setYm] = useState(defaultBudgetMonth)
+  const saved = budgets.find((b) => b.year_month === ym)?.amount_ngn ?? 0
   const carryIn = carryoverInto(expenses, ym, budgets)
-  const [amount, setAmount] = useState(current ? String(current) : '200000')
+  const [amount, setAmount] = useState(saved ? String(saved) : '')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    const next = budgets.find((b) => b.year_month === ym)?.amount_ngn ?? 0
+    setAmount(next ? String(next) : '')
+    setMessage('')
+    setError('')
+  }, [ym, budgets])
 
   const plannedBudget = Math.round(Number(String(amount).replace(/,/g, ''))) || 0
   const totalAvailable =
@@ -44,9 +56,29 @@ export function BudgetPage() {
 
   return (
     <div className="stack">
-      <div>
-        <h1 className="page-title">Budget</h1>
-        <p className="page-sub">Set the combined monthly ceiling in Naira.</p>
+      <div className="row space-between">
+        <div>
+          <h1 className="page-title">Budget</h1>
+          <p className="page-sub">Set a ceiling for any month in Naira.</p>
+        </div>
+        <div className="row">
+          <button
+            type="button"
+            className="btn secondary"
+            aria-label="Previous month"
+            onClick={() => setYm((v) => shiftYearMonth(v, -1))}
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            className="btn secondary"
+            aria-label="Next month"
+            onClick={() => setYm((v) => shiftYearMonth(v, 1))}
+          >
+            →
+          </button>
+        </div>
       </div>
 
       <form className="panel stack" onSubmit={onSubmit}>
@@ -55,11 +87,12 @@ export function BudgetPage() {
           <input
             id="budget"
             inputMode="numeric"
+            placeholder="200000"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             required
           />
-          <span className="hint">Example: 200000 for ₦200,000</span>
+          <span className="hint">Example: 200000 for ₦200,000 · Use arrows to change month</span>
         </div>
         {carryIn > 0 && (
           <p className="hint" style={{ margin: 0 }}>
@@ -73,9 +106,13 @@ export function BudgetPage() {
           </p>
         )}
         {error && <p className="error">{error}</p>}
-        {message && <p className="hint" style={{ color: 'var(--ok)' }}>{message}</p>}
+        {message && (
+          <p className="hint" style={{ color: 'var(--ok)' }}>
+            {message}
+          </p>
+        )}
         <button className="btn block" type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Save budget'}
+          {busy ? 'Saving…' : `Save ${formatYearMonth(ym)} budget`}
         </button>
       </form>
 

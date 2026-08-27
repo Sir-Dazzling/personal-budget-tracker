@@ -1,13 +1,18 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { BudgetHero } from '../components/BudgetHero'
 import { ExpenseList } from '../components/ExpenseList'
 import { useApp } from '../context/AppContext'
 import { expensesInMonth, monthSummary } from '../lib/analytics'
-import { formatYearMonth, yearMonthFromDate } from '../lib/format'
+import {
+  defaultBudgetMonth,
+  formatYearMonth,
+  shiftYearMonth,
+} from '../lib/format'
 
 export function HomePage() {
   const { household, members, budgets, expenses, deleteExpense, signOut, cloud } = useApp()
-  const ym = yearMonthFromDate()
+  const [ym, setYm] = useState(defaultBudgetMonth)
   const summary = monthSummary(expenses, ym, budgets)
   const recent = expensesInMonth(expenses, ym).slice(0, 8)
 
@@ -18,9 +23,27 @@ export function HomePage() {
           <h1 className="page-title">{household?.name ?? 'This month'}</h1>
           <p className="page-sub">{formatYearMonth(ym)}</p>
         </div>
-        <button type="button" className="btn secondary" onClick={() => void signOut()}>
-          Sign out
-        </button>
+        <div className="row">
+          <button
+            type="button"
+            className="btn secondary"
+            aria-label="Previous month"
+            onClick={() => setYm((v) => shiftYearMonth(v, -1))}
+          >
+            ←
+          </button>
+          <button
+            type="button"
+            className="btn secondary"
+            aria-label="Next month"
+            onClick={() => setYm((v) => shiftYearMonth(v, 1))}
+          >
+            →
+          </button>
+          <button type="button" className="btn secondary" onClick={() => void signOut()}>
+            Sign out
+          </button>
+        </div>
       </div>
 
       <BudgetHero

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
-import { CATEGORIES, formatNaira, todayISO } from '../lib/format'
+import { CATEGORIES, defaultBudgetMonth, defaultDateInMonth, formatNaira } from '../lib/format'
 
 export function AddExpensePage() {
   const { members, myMember, addExpense } = useApp()
@@ -10,7 +10,7 @@ export function AddExpensePage() {
   const [category, setCategory] = useState(CATEGORIES[0])
   const [note, setNote] = useState('')
   const [spentBy, setSpentBy] = useState('')
-  const [spentOn, setSpentOn] = useState(todayISO())
+  const [spentOn, setSpentOn] = useState(() => defaultDateInMonth(defaultBudgetMonth()))
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
