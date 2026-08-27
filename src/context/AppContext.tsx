@@ -17,6 +17,7 @@ import {
   localSignIn,
   localSignOut,
   localSignUp,
+  localUpdateExpense,
   localUpsertBudget,
   loadLocal,
 } from '../lib/localStore'
@@ -49,7 +50,7 @@ interface AppData {
   signOut: () => Promise<void>
   createHousehold: (name: string, displayName: string) => Promise<void>
   joinHousehold: (code: string, displayName: string) => Promise<void>
-  setBudget: (yearMonth: string, amount: number) => Promise<void>
+  setBudget: (yearMonth: string, expectedExpenses: number, income: number) => Promise<void>
   addExpense: (input: {
     amount_ngn: number
     category: string
@@ -58,6 +59,16 @@ interface AppData {
     spent_on: string
   }) => Promise<void>
   deleteExpense: (id: string) => Promise<void>
+  updateExpense: (
+    id: string,
+    input: {
+      amount_ngn: number
+      category: string
+      note: string
+      spent_by: string
+      spent_on: string
+    },
+  ) => Promise<void>
   renameMember: (memberId: string, name: string) => Promise<void>
 }
 
@@ -91,7 +102,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     )
     setHousehold(s.household)
     setMembers(s.members)
-    setBudgets(s.budgets)
+    setBudgets(s.budgets.map((b) => ({ ...b, income_ngn: b.income_ngn ?? 0 })))
     setExpenses(s.expenses)
   }, [])
 
@@ -125,7 +136,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       ])
     setHousehold(hh as Household)
     setMembers((mems as Member[]) ?? [])
-    setBudgets((buds as MonthlyBudget[]) ?? [])
+    setBudgets((buds as MonthlyBudget[])?.map((b) => ({ ...b, income_ngn: b.income_ngn ?? 0 })) ?? [])
     setExpenses((exps as Expense[]) ?? [])
   }, [])
 
@@ -352,6 +363,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             household_id: mem.household_id,
             year_month: defaultBudgetMonth(),
             amount_ngn: 200_000,
+            income_ngn: 0,
           },
           { onConflict: 'household_id,year_month' },
         )
@@ -380,9 +392,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const setBudget = useCallback(
-    async (yearMonth: string, amount: number) => {
+    async (yearMonth: string, expectedExpenses: number, income: number) => {
       if (!cloud || !supabase) {
-        localUpsertBudget(yearMonth, amount)
+        localUpsertBudget(yearMonth, expectedExpenses, income)
         applyLocal()
         return
       }
@@ -391,7 +403,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         {
           household_id: household.id,
           year_month: yearMonth,
-          amount_ngn: amount,
+          amount_ngn: expectedExpenses,
+          income_ngn: income,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'household_id,year_month' },
@@ -445,6 +458,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
     [cloud, applyLocal, loadCloudHousehold, user],
   )
 
+  const updateExpense = useCallback(
+    async (
+      id: string,
+      input: {
+        amount_ngn: number
+        category: string
+        note: string
+        spent_by: string
+        spent_on: string
+      },
+    ) => {
+      if (!cloud || !supabase) {
+        localUpdateExpense(id, input)
+        applyLocal()
+        return
+      }
+      const { error } = await supabase
+        .from('expenses')
+        .update({
+          amount_ngn: input.amount_ngn,
+          category: input.category,
+          note: input.note,
+          spent_by: input.spent_by,
+          spent_on: input.spent_on,
+        })
+        .eq('id', id)
+      if (error) throw error
+      await loadCloudHousehold(user!.id)
+    },
+    [cloud, applyLocal, loadCloudHousehold, user],
+  )
+
   const renameMember = useCallback(
     async (memberId: string, name: string) => {
       if (!cloud || !supabase) {
@@ -485,6 +530,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setBudget,
     addExpense,
     deleteExpense,
+    updateExpense,
     renameMember,
   }
 

@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext'
 import {
   expensesInMonth,
   expensesOnDate,
+  monthSummary,
   spendByCategory,
   spendByMember,
   sumExpenses,
@@ -26,7 +27,7 @@ export function HistoryPage() {
 
   const monthExpenses = useMemo(() => expensesInMonth(expenses, ym), [expenses, ym])
   const dayExpenses = useMemo(() => expensesOnDate(expenses, day), [expenses, day])
-  const budget = budgets.find((b) => b.year_month === ym)?.amount_ngn ?? 0
+  const summary = useMemo(() => monthSummary(expenses, ym, budgets), [expenses, ym, budgets])
   const monthSpent = sumExpenses(monthExpenses)
   const daySpent = sumExpenses(dayExpenses)
   const byCat = spendByCategory(expenses, ym)
@@ -103,12 +104,20 @@ export function HistoryPage() {
         <>
           <div className="stat-grid">
             <div className="stat-card">
+              <h3>Income</h3>
+              <p>{summary.income ? formatNaira(summary.income, true) : '—'}</p>
+            </div>
+            <div className="stat-card">
               <h3>Spent</h3>
               <p>{formatNaira(monthSpent, true)}</p>
             </div>
             <div className="stat-card">
-              <h3>Budget</h3>
-              <p>{budget ? formatNaira(budget, true) : '—'}</p>
+              <h3>Net</h3>
+              <p>{summary.income ? formatNaira(summary.netIncome, true) : '—'}</p>
+            </div>
+            <div className="stat-card">
+              <h3>Expected</h3>
+              <p>{summary.budget ? formatNaira(summary.budget, true) : '—'}</p>
             </div>
           </div>
 

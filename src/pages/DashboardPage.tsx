@@ -75,8 +75,16 @@ export function DashboardPage() {
 
       <div className="stat-grid">
         <div className="stat-card">
+          <h3>Income</h3>
+          <p>{summary.income ? formatNaira(summary.income, true) : '—'}</p>
+        </div>
+        <div className="stat-card">
           <h3>Spent</h3>
           <p>{formatNaira(summary.spent, true)}</p>
+        </div>
+        <div className="stat-card">
+          <h3>Net</h3>
+          <p>{summary.income ? formatNaira(summary.netIncome, true) : '—'}</p>
         </div>
         <div className="stat-card">
           <h3>Pace</h3>

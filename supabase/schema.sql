@@ -33,12 +33,13 @@ create table public.members (
 create index members_user_id_idx on public.members (user_id);
 create index members_household_id_idx on public.members (household_id);
 
--- Monthly budgets (amount in kobo? No — store whole Naira as integer naira)
+-- Monthly budgets (amount_ngn = expected expenses; income_ngn = income received)
 create table public.monthly_budgets (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references public.households (id) on delete cascade,
   year_month text not null, -- YYYY-MM
   amount_ngn bigint not null check (amount_ngn >= 0),
+  income_ngn bigint not null default 0 check (income_ngn >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (household_id, year_month)

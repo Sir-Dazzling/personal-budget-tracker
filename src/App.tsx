@@ -38,6 +38,7 @@ export default function App() {
       >
         <Route index element={<HomePage />} />
         <Route path="add" element={<AddExpensePage />} />
+        <Route path="add/:expenseId" element={<AddExpensePage />} />
         <Route path="dashboard" element={<DashboardPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="budget" element={<BudgetPage />} />

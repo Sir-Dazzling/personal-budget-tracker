@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 import {
   CATEGORIES,
@@ -9,12 +9,17 @@ import {
   isForcedIntoTrackingMonth,
   todayISO,
 } from '../lib/format'
+import type { Category } from '../types'
 
 export function AddExpensePage() {
-  const { members, myMember, addExpense } = useApp()
+  const { expenseId } = useParams()
+  const { members, myMember, addExpense, updateExpense, expenses } = useApp()
   const navigate = useNavigate()
+  const editing = expenses.find((e) => e.id === expenseId)
+  const isEdit = Boolean(expenseId && editing)
+
   const [amount, setAmount] = useState('')
-  const [category, setCategory] = useState(CATEGORIES[0])
+  const [category, setCategory] = useState<Category>(CATEGORIES[0])
   const [note, setNote] = useState('')
   const [spentBy, setSpentBy] = useState('')
   const [spentOn, setSpentOn] = useState(() => todayISO())
@@ -23,11 +28,24 @@ export function AddExpensePage() {
   const countsTowardSept = isForcedIntoTrackingMonth()
 
   useEffect(() => {
-    if (!spentBy) {
+    if (!expenseId) return
+    if (!editing) {
+      navigate('/', { replace: true })
+      return
+    }
+    setAmount(String(editing.amount_ngn))
+    setCategory((CATEGORIES.includes(editing.category as Category) ? editing.category : 'Other') as Category)
+    setNote(editing.note)
+    setSpentBy(editing.spent_by)
+    setSpentOn(editing.spent_on)
+  }, [expenseId, editing, navigate])
+
+  useEffect(() => {
+    if (!spentBy && !isEdit) {
       const id = myMember?.id ?? members[0]?.id
       if (id) setSpentBy(id)
     }
-  }, [spentBy, myMember, members])
+  }, [spentBy, myMember, members, isEdit])
 
   const parsed = useMemo(() => {
     const n = Number(String(amount).replace(/,/g, ''))
@@ -47,13 +65,18 @@ export function AddExpensePage() {
     }
     setBusy(true)
     try {
-      await addExpense({
+      const payload = {
         amount_ngn: parsed,
         category,
         note: note.trim(),
         spent_by: spentBy,
         spent_on: spentOn,
-      })
+      }
+      if (isEdit && expenseId) {
+        await updateExpense(expenseId, payload)
+      } else {
+        await addExpense(payload)
+      }
       navigate('/')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save')
@@ -65,7 +88,7 @@ export function AddExpensePage() {
   return (
     <div className="stack">
       <div>
-        <h1 className="page-title">Add expense</h1>
+        <h1 className="page-title">{isEdit ? 'Edit expense' : 'Add expense'}</h1>
         <p className="page-sub">Quick entry — amount, category, who paid.</p>
       </div>
 
@@ -146,7 +169,7 @@ export function AddExpensePage() {
 
         {error && <p className="error">{error}</p>}
         <button className="btn block" type="submit" disabled={busy}>
-          {busy ? 'Saving…' : 'Save expense'}
+          {busy ? 'Saving…' : isEdit ? 'Save changes' : 'Save expense'}
         </button>
       </form>
     </div>

@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useApp } from '../context/AppContext'
-import { carryoverInto } from '../lib/analytics'
+import { carryoverInto, monthSummary } from '../lib/analytics'
 import {
   defaultBudgetMonth,
   formatNaira,
@@ -11,41 +11,46 @@ import {
 export function BudgetPage() {
   const { budgets, expenses, setBudget, members, renameMember, household, cloud } = useApp()
   const [ym, setYm] = useState(defaultBudgetMonth)
-  const saved = budgets.find((b) => b.year_month === ym)?.amount_ngn ?? 0
+  const row = budgets.find((b) => b.year_month === ym)
   const carryIn = carryoverInto(expenses, ym, budgets)
-  const [amount, setAmount] = useState(saved ? String(saved) : '')
+  const live = monthSummary(expenses, ym, budgets)
+  const [income, setIncome] = useState(row?.income_ngn ? String(row.income_ngn) : '')
+  const [expected, setExpected] = useState(row?.amount_ngn ? String(row.amount_ngn) : '')
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    const next = budgets.find((b) => b.year_month === ym)?.amount_ngn ?? 0
-    setAmount(next ? String(next) : '')
+    const b = budgets.find((x) => x.year_month === ym)
+    setIncome(b?.income_ngn ? String(b.income_ngn) : '')
+    setExpected(b?.amount_ngn ? String(b.amount_ngn) : '')
     setMessage('')
     setError('')
   }, [ym, budgets])
 
-  const plannedBudget = Math.round(Number(String(amount).replace(/,/g, ''))) || 0
+  const incomeN = Math.round(Number(String(income).replace(/,/g, ''))) || 0
+  const expectedN = Math.round(Number(String(expected).replace(/,/g, ''))) || 0
   const totalAvailable =
-    (Number.isFinite(plannedBudget) && plannedBudget >= 0 ? plannedBudget : 0) + carryIn
+    (Number.isFinite(expectedN) && expectedN >= 0 ? expectedN : 0) + carryIn
+  const plannedNet =
+    (Number.isFinite(incomeN) && incomeN >= 0 ? incomeN : 0) -
+    (Number.isFinite(expectedN) && expectedN >= 0 ? expectedN : 0)
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     setError('')
     setMessage('')
-    const n = Math.round(Number(String(amount).replace(/,/g, '')))
-    if (!Number.isFinite(n) || n < 0) {
-      setError('Enter a valid budget amount')
+    const inc = Math.round(Number(String(income).replace(/,/g, '')))
+    const exp = Math.round(Number(String(expected).replace(/,/g, '')))
+    if (!Number.isFinite(inc) || inc < 0 || !Number.isFinite(exp) || exp < 0) {
+      setError('Enter valid amounts (0 or more)')
       return
     }
     setBusy(true)
     try {
-      await setBudget(ym, n)
-      const available = n + carryIn
+      await setBudget(ym, exp, inc)
       setMessage(
-        carryIn > 0
-          ? `Budget for ${formatYearMonth(ym)} set to ${formatNaira(n)} · ${formatNaira(available)} total with carryover`
-          : `Budget for ${formatYearMonth(ym)} set to ${formatNaira(n)}`,
+        `Saved for ${formatYearMonth(ym)} · Planned net ${formatNaira(inc - exp)} · Live net ${formatNaira(inc - live.spent)}`,
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save')
@@ -59,7 +64,7 @@ export function BudgetPage() {
       <div className="row space-between">
         <div>
           <h1 className="page-title">Budget</h1>
-          <p className="page-sub">Set a ceiling for any month in Naira.</p>
+          <p className="page-sub">Income and expected expenses for each month.</p>
         </div>
         <div className="row">
           <button
@@ -82,29 +87,57 @@ export function BudgetPage() {
       </div>
 
       <form className="panel stack" onSubmit={onSubmit}>
+        <p className="hint" style={{ margin: 0 }}>
+          {formatYearMonth(ym)}
+        </p>
+
         <div className="field">
-          <label htmlFor="budget">{formatYearMonth(ym)}</label>
+          <label htmlFor="income">Income received (₦)</label>
           <input
-            id="budget"
+            id="income"
+            inputMode="numeric"
+            placeholder="500000"
+            value={income}
+            onChange={(e) => setIncome(e.target.value)}
+          />
+          <span className="hint">What came in this month</span>
+        </div>
+
+        <div className="field">
+          <label htmlFor="expected">Expected expenses (₦)</label>
+          <input
+            id="expected"
             inputMode="numeric"
             placeholder="200000"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            required
+            value={expected}
+            onChange={(e) => setExpected(e.target.value)}
           />
-          <span className="hint">Example: 200000 for ₦200,000 · Use arrows to change month</span>
+          <span className="hint">Spending ceiling — overspend is tracked against this (+ carryover)</span>
         </div>
+
+        <div className="stat-grid">
+          <div className="stat-card">
+            <h3>Planned net</h3>
+            <p>{formatNaira(plannedNet, true)}</p>
+          </div>
+          <div className="stat-card">
+            <h3>Live net</h3>
+            <p>{formatNaira(incomeN - live.spent, true)}</p>
+          </div>
+        </div>
+
         {carryIn > 0 && (
           <p className="hint" style={{ margin: 0 }}>
             Expected carry-in from last month: <strong>{formatNaira(carryIn)}</strong>
-            {Number.isFinite(plannedBudget) && plannedBudget >= 0 && (
+            {Number.isFinite(expectedN) && expectedN >= 0 && (
               <>
                 {' '}
-                · Total available: <strong>{formatNaira(totalAvailable)}</strong>
+                · Total spend ceiling: <strong>{formatNaira(totalAvailable)}</strong>
               </>
             )}
           </p>
         )}
+
         {error && <p className="error">{error}</p>}
         {message && (
           <p className="hint" style={{ color: 'var(--ok)' }}>
@@ -112,7 +145,7 @@ export function BudgetPage() {
           </p>
         )}
         <button className="btn block" type="submit" disabled={busy}>
-          {busy ? 'Saving…' : `Save ${formatYearMonth(ym)} budget`}
+          {busy ? 'Saving…' : `Save ${formatYearMonth(ym)} plan`}
         </button>
       </form>
 

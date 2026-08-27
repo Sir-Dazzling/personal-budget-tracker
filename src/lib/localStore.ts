@@ -85,6 +85,7 @@ export function loadLocal(): LocalState {
     const raw = localStorage.getItem(KEY)
     if (!raw) return empty()
     const parsed = scrubPreTracking({ ...empty(), ...JSON.parse(raw) })
+    parsed.budgets = parsed.budgets.map((b) => ({ ...b, income_ngn: b.income_ngn ?? 0 }))
     if (parsed.budgets.length !== (JSON.parse(raw).budgets?.length ?? 0)) {
       localStorage.setItem(KEY, JSON.stringify(parsed))
       if (parsed.session) persistCurrentToVault(parsed)
@@ -213,6 +214,7 @@ export function localCreateHousehold(name: string, displayName: string): LocalSt
       household_id: hid,
       year_month: ym,
       amount_ngn: 200_000,
+      income_ngn: 0,
     },
   ]
   state.expenses = []
@@ -247,7 +249,11 @@ export function localJoinHousehold(code: string, displayName: string): LocalStat
   return state
 }
 
-export function localUpsertBudget(yearMonth: string, amount: number): LocalState {
+export function localUpsertBudget(
+  yearMonth: string,
+  amount: number,
+  income: number,
+): LocalState {
   const state = loadLocal()
   if (!state.household) throw new Error('No household')
   const existing = state.budgets.find(
@@ -255,12 +261,14 @@ export function localUpsertBudget(yearMonth: string, amount: number): LocalState
   )
   if (existing) {
     existing.amount_ngn = amount
+    existing.income_ngn = income
   } else {
     state.budgets.push({
       id: uid(),
       household_id: state.household.id,
       year_month: yearMonth,
       amount_ngn: amount,
+      income_ngn: income,
     })
   }
   saveLocal(state)
@@ -294,6 +302,28 @@ export function localAddExpense(input: {
 export function localDeleteExpense(id: string): LocalState {
   const state = loadLocal()
   state.expenses = state.expenses.filter((e) => e.id !== id)
+  saveLocal(state)
+  return state
+}
+
+export function localUpdateExpense(
+  id: string,
+  input: {
+    amount_ngn: number
+    category: string
+    note: string
+    spent_by: string
+    spent_on: string
+  },
+): LocalState {
+  const state = loadLocal()
+  const expense = state.expenses.find((e) => e.id === id)
+  if (!expense) throw new Error('Expense not found')
+  expense.amount_ngn = input.amount_ngn
+  expense.category = input.category
+  expense.note = input.note
+  expense.spent_by = input.spent_by
+  expense.spent_on = input.spent_on
   saveLocal(state)
   return state
 }

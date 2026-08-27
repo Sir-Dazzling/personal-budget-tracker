@@ -31,7 +31,10 @@ export interface MonthlyBudget {
   id: string
   household_id: string
   year_month: string
+  /** Expected expenses ceiling for the month. */
   amount_ngn: number
+  /** Income received for the month. */
+  income_ngn: number
 }
 
 export interface Expense {
@@ -50,9 +53,15 @@ export type BudgetStatus = 'ok' | 'warn' | 'over' | 'none'
 
 export interface MonthSummary {
   yearMonth: string
-  /** Budget set for this month (excludes carryover). */
+  /** Expected expenses set for this month (excludes carryover). */
   budget: number
-  /** Unused amount carried in from the previous month (never negative). */
+  /** Income received this month. */
+  income: number
+  /** income − actual spent. */
+  netIncome: number
+  /** income − expected expenses (planned leftover if you stick to plan). */
+  plannedNet: number
+  /** Unused expected-budget amount carried in from the previous month (never negative). */
   carryover: number
   /** budget + carryover — the ceiling used for remaining / pace / status. */
   totalAvailable: number

@@ -60,6 +60,8 @@ export function HomePage() {
         carryover={summary.carryover}
         totalAvailable={summary.totalAvailable}
         status={summary.status}
+        income={summary.income}
+        netIncome={summary.netIncome}
       />
 
       <Link to="/add" className="btn fab">

@@ -33,11 +33,16 @@ export function sumExpenses(expenses: Expense[]): number {
   return expenses.reduce((s, e) => s + e.amount_ngn, 0)
 }
 
-type BudgetLookup = ((ym: string) => number) | Pick<MonthlyBudget, 'year_month' | 'amount_ngn'>[]
+type BudgetLookup = ((ym: string) => number) | Pick<MonthlyBudget, 'year_month' | 'amount_ngn' | 'income_ngn'>[]
 
 function resolveBudget(budgets: BudgetLookup, ym: string): number {
   if (typeof budgets === 'function') return budgets(ym)
   return budgets.find((b) => b.year_month === ym)?.amount_ngn ?? 0
+}
+
+function resolveIncome(budgets: BudgetLookup, ym: string): number {
+  if (typeof budgets === 'function') return 0
+  return budgets.find((b) => b.year_month === ym)?.income_ngn ?? 0
 }
 
 function earliestRelevantMonth(
@@ -94,14 +99,20 @@ export function monthSummary(
   budgets: BudgetLookup,
 ): MonthSummary {
   const budgetAmount = resolveBudget(budgets, yearMonth)
+  const income = resolveIncome(budgets, yearMonth)
   const carryover = carryoverInto(expenses, yearMonth, budgets)
   const totalAvailable = budgetAmount + carryover
   const spent = sumExpenses(expensesInMonth(expenses, yearMonth))
   const remaining = totalAvailable - spent
   const ratio = totalAvailable > 0 ? spent / totalAvailable : 0
+  const netIncome = income - spent
+  const plannedNet = income - budgetAmount
   return {
     yearMonth,
     budget: budgetAmount,
+    income,
+    netIncome,
+    plannedNet,
     carryover,
     totalAvailable,
     spent,
