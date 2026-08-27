@@ -21,7 +21,7 @@ import {
   loadLocal,
 } from '../lib/localStore'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
-import { MEMBER_COLORS, clampExpenseDate, defaultBudgetMonth } from '../lib/format'
+import { MEMBER_COLORS, defaultBudgetMonth } from '../lib/format'
 
 interface SessionUser {
   id: string
@@ -110,6 +110,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return
     }
     const hid = memberships[0].household_id as string
+
     const [{ data: hh }, { data: mems }, { data: buds }, { data: exps }] =
       await Promise.all([
         supabase.from('households').select('*').eq('id', hid).single(),
@@ -409,9 +410,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       spent_by: string
       spent_on: string
     }) => {
-      const spentOn = clampExpenseDate(input.spent_on)
       if (!cloud || !supabase) {
-        localAddExpense({ ...input, spent_on: spentOn })
+        localAddExpense(input)
         applyLocal()
         return
       }
@@ -422,7 +422,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         category: input.category,
         note: input.note,
         spent_by: input.spent_by,
-        spent_on: spentOn,
+        spent_on: input.spent_on,
         created_by: user.id,
       })
       if (error) throw error

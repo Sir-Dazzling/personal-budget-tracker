@@ -13,7 +13,19 @@ export function expensesOnDate(expenses: Expense[], dateISO: string): Expense[] 
   return expenses.filter((e) => e.spent_on === dateISO)
 }
 
+/**
+ * Expenses that count toward a month's budget.
+ * September (tracking start) also includes real August (pre-start) spend —
+ * dates stay as August, but they reduce the September budget.
+ * From September onward, normal calendar-month matching.
+ */
 export function expensesInMonth(expenses: Expense[], yearMonth: string): Expense[] {
+  if (yearMonth === TRACKING_START_MONTH) {
+    const startDay = `${TRACKING_START_MONTH}-01`
+    return expenses.filter(
+      (e) => e.spent_on.startsWith(yearMonth) || e.spent_on < startDay,
+    )
+  }
   return expenses.filter((e) => e.spent_on.startsWith(yearMonth))
 }
 

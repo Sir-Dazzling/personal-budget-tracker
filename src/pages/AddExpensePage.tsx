@@ -4,10 +4,10 @@ import { useApp } from '../context/AppContext'
 import {
   CATEGORIES,
   TRACKING_START_MONTH,
-  clampExpenseDate,
-  defaultBudgetMonth,
-  defaultDateInMonth,
   formatNaira,
+  formatYearMonth,
+  isForcedIntoTrackingMonth,
+  todayISO,
 } from '../lib/format'
 
 export function AddExpensePage() {
@@ -17,9 +17,10 @@ export function AddExpensePage() {
   const [category, setCategory] = useState(CATEGORIES[0])
   const [note, setNote] = useState('')
   const [spentBy, setSpentBy] = useState('')
-  const [spentOn, setSpentOn] = useState(() => defaultDateInMonth(defaultBudgetMonth()))
+  const [spentOn, setSpentOn] = useState(() => todayISO())
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const countsTowardSept = isForcedIntoTrackingMonth()
 
   useEffect(() => {
     if (!spentBy) {
@@ -27,10 +28,6 @@ export function AddExpensePage() {
       if (id) setSpentBy(id)
     }
   }, [spentBy, myMember, members])
-
-  useEffect(() => {
-    setSpentOn((d) => clampExpenseDate(d))
-  }, [])
 
   const parsed = useMemo(() => {
     const n = Number(String(amount).replace(/,/g, ''))
@@ -55,7 +52,7 @@ export function AddExpensePage() {
         category,
         note: note.trim(),
         spent_by: spentBy,
-        spent_on: clampExpenseDate(spentOn),
+        spent_on: spentOn,
       })
       navigate('/')
     } catch (err) {
@@ -125,14 +122,16 @@ export function AddExpensePage() {
           <input
             id="date"
             type="date"
-            min={`${TRACKING_START_MONTH}-01`}
             value={spentOn}
-            onChange={(e) => setSpentOn(clampExpenseDate(e.target.value))}
+            onChange={(e) => setSpentOn(e.target.value)}
             required
           />
-          <span className="hint">
-            Tracking starts September — August dates are saved as September (same day).
-          </span>
+          {countsTowardSept && (
+            <span className="hint">
+              Kept as {spentOn}, but counts toward{' '}
+              <strong>{formatYearMonth(TRACKING_START_MONTH)}</strong> until September starts.
+            </span>
+          )}
         </div>
 
         <div className="field">
