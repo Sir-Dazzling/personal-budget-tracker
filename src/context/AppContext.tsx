@@ -29,6 +29,11 @@ interface SessionUser {
   displayName: string
 }
 
+interface AuthResult {
+  next: 'home' | 'onboarding' | 'confirm-email'
+  message?: string
+}
+
 interface AppData {
   loading: boolean
   cloud: boolean
@@ -39,8 +44,8 @@ interface AppData {
   expenses: Expense[]
   myMember: Member | null
   refresh: () => Promise<void>
-  signUp: (email: string, password: string, displayName: string) => Promise<void>
-  signIn: (email: string, password: string) => Promise<void>
+  signUp: (email: string, password: string, displayName: string) => Promise<AuthResult>
+  signIn: (email: string, password: string) => Promise<AuthResult>
   signOut: () => Promise<void>
   createHousehold: (name: string, displayName: string) => Promise<void>
   joinHousehold: (code: string, displayName: string) => Promise<void>
@@ -227,33 +232,84 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [cloud, household, loadCloudHousehold, user])
 
   const signUp = useCallback(
-    async (email: string, password: string, displayName: string) => {
+    async (email: string, password: string, displayName: string): Promise<AuthResult> => {
       if (!cloud || !supabase) {
         localSignUp(email, displayName)
         applyLocal()
-        return
+        const s = loadLocal()
+        return { next: s.household ? 'home' : 'onboarding' }
       }
-      const { error } = await supabase.auth.signUp({
-        email,
+
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim().toLowerCase(),
         password,
         options: { data: { display_name: displayName } },
       })
       if (error) throw error
+
+      if (!data.session || !data.user) {
+        return {
+          next: 'confirm-email',
+          message:
+            'Account created. Confirm your email (check inbox), then sign in. Or in Supabase → Authentication → Providers → Email, turn off “Confirm email”.',
+        }
+      }
+
+      const name =
+        displayName.trim() ||
+        (data.user.user_metadata?.display_name as string) ||
+        data.user.email?.split('@')[0] ||
+        'You'
+      setUser({
+        id: data.user.id,
+        email: data.user.email ?? email,
+        displayName: name,
+      })
+      await loadCloudHousehold(data.user.id)
+      const { data: memberships } = await supabase
+        .from('members')
+        .select('id')
+        .eq('user_id', data.user.id)
+        .limit(1)
+      return { next: memberships?.length ? 'home' : 'onboarding' }
     },
-    [cloud, applyLocal],
+    [cloud, applyLocal, loadCloudHousehold],
   )
 
   const signIn = useCallback(
-    async (email: string, password: string) => {
+    async (email: string, password: string): Promise<AuthResult> => {
       if (!cloud || !supabase) {
         localSignIn(email)
         applyLocal()
-        return
+        const s = loadLocal()
+        return { next: s.household ? 'home' : 'onboarding' }
       }
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
+
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim().toLowerCase(),
+        password,
+      })
       if (error) throw error
+      if (!data.user) throw new Error('Sign in failed — no user returned')
+
+      const name =
+        (data.user.user_metadata?.display_name as string) ||
+        data.user.email?.split('@')[0] ||
+        'You'
+      setUser({
+        id: data.user.id,
+        email: data.user.email ?? email,
+        displayName: name,
+      })
+      await loadCloudHousehold(data.user.id)
+      const { data: memberships } = await supabase
+        .from('members')
+        .select('id')
+        .eq('user_id', data.user.id)
+        .limit(1)
+      return { next: memberships?.length ? 'home' : 'onboarding' }
     },
-    [cloud, applyLocal],
+    [cloud, applyLocal, loadCloudHousehold],
   )
 
   const signOut = useCallback(async () => {
@@ -263,6 +319,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return
     }
     await supabase.auth.signOut()
+    setUser(null)
+    setHousehold(null)
+    setMembers([])
+    setBudgets([])
+    setExpenses([])
   }, [cloud, applyLocal])
 
   const createHousehold = useCallback(

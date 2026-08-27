@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 
@@ -6,10 +6,14 @@ export function OnboardingPage() {
   const { user, household, createHousehold, joinHousehold, cloud } = useApp()
   const [tab, setTab] = useState<'create' | 'join'>('create')
   const [householdName, setHouseholdName] = useState('Brother budget')
-  const [displayName, setDisplayName] = useState(user?.displayName ?? '')
+  const [displayName, setDisplayName] = useState('')
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (user?.displayName) setDisplayName(user.displayName)
+  }, [user?.displayName])
 
   if (!user) return <Navigate to="/auth" replace />
   if (household) return <Navigate to="/" replace />

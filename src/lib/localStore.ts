@@ -2,15 +2,33 @@ import type { Expense, Household, Member, MonthlyBudget } from '../types'
 import { MEMBER_COLORS, TRACKING_START_MONTH, defaultBudgetMonth, uid } from './format'
 
 const KEY = 'split-local-v1'
+const VAULT_KEY = 'split-local-vault-v1'
+
+export interface LocalSession {
+  userId: string
+  email: string
+  displayName: string
+}
 
 export interface LocalState {
   mode: 'local'
-  session: { userId: string; email: string; displayName: string } | null
+  session: LocalSession | null
   household: Household | null
   members: Member[]
   budgets: MonthlyBudget[]
   expenses: Expense[]
 }
+
+type Vault = Record<
+  string,
+  {
+    session: LocalSession
+    household: Household | null
+    members: Member[]
+    budgets: MonthlyBudget[]
+    expenses: Expense[]
+  }
+>
 
 function empty(): LocalState {
   return {
@@ -23,6 +41,38 @@ function empty(): LocalState {
   }
 }
 
+function loadVault(): Vault {
+  try {
+    const raw = localStorage.getItem(VAULT_KEY)
+    if (!raw) return {}
+    return JSON.parse(raw) as Vault
+  } catch {
+    return {}
+  }
+}
+
+function saveVault(vault: Vault) {
+  localStorage.setItem(VAULT_KEY, JSON.stringify(vault))
+}
+
+function persistCurrentToVault(state: LocalState) {
+  if (!state.session?.email) return
+  const email = state.session.email.trim().toLowerCase()
+  const vault = loadVault()
+  vault[email] = {
+    session: state.session,
+    household: state.household,
+    members: state.members,
+    budgets: state.budgets,
+    expenses: state.expenses,
+  }
+  saveVault(vault)
+}
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase()
+}
+
 /** Drop accidental pre-September seed budgets so they don't look like real history. */
 function scrubPreTracking(state: LocalState): LocalState {
   const budgets = state.budgets.filter((b) => b.year_month >= TRACKING_START_MONTH)
@@ -30,9 +80,7 @@ function scrubPreTracking(state: LocalState): LocalState {
   if (budgets.length === state.budgets.length && expenses.length === state.expenses.length) {
     return state
   }
-  const next = { ...state, budgets, expenses }
-  saveLocal(next)
-  return next
+  return { ...state, budgets, expenses }
 }
 
 export function loadLocal(): LocalState {
@@ -46,34 +94,92 @@ export function loadLocal(): LocalState {
 }
 
 export function saveLocal(state: LocalState) {
-  localStorage.setItem(KEY, JSON.stringify(state))
+  const cleaned = scrubPreTracking(state)
+  localStorage.setItem(KEY, JSON.stringify(cleaned))
+  if (cleaned.session) persistCurrentToVault(cleaned)
 }
 
 export function localSignUp(email: string, displayName: string): LocalState {
-  const state = loadLocal()
-  const userId = uid()
-  state.session = { userId, email, displayName }
+  const normalized = normalizeEmail(email)
+  if (!normalized || !normalized.includes('@')) {
+    throw new Error('Enter a valid email address')
+  }
+  const name = displayName.trim() || normalized.split('@')[0] || 'You'
+
+  // Already signed in as this email
+  const current = loadLocal()
+  if (current.session && normalizeEmail(current.session.email) === normalized) {
+    current.session.displayName = name
+    saveLocal(current)
+    return current
+  }
+
+  // Save whoever was signed in, then start fresh for this email (or restore vault)
+  if (current.session) persistCurrentToVault(current)
+
+  const vault = loadVault()
+  const existing = vault[normalized]
+  if (existing) {
+    throw new Error('An account with this email already exists on this device. Sign in instead.')
+  }
+
+  const state = empty()
+  state.session = {
+    userId: uid(),
+    email: normalized,
+    displayName: name,
+  }
   saveLocal(state)
   return state
 }
 
-export function localSignIn(email: string, displayName?: string): LocalState {
-  const state = loadLocal()
-  if (state.session?.email === email) {
-    return state
+export function localSignIn(email: string): LocalState {
+  const normalized = normalizeEmail(email)
+  if (!normalized || !normalized.includes('@')) {
+    throw new Error('Enter a valid email address')
   }
-  return localSignUp(email, displayName || email.split('@')[0] || 'You')
+
+  const current = loadLocal()
+  if (current.session && normalizeEmail(current.session.email) === normalized) {
+    return current
+  }
+  if (current.session) persistCurrentToVault(current)
+
+  const vault = loadVault()
+  const saved = vault[normalized]
+  if (!saved) {
+    throw new Error('No account found for that email on this device. Sign up first.')
+  }
+
+  const state: LocalState = {
+    mode: 'local',
+    session: saved.session,
+    household: saved.household,
+    members: saved.members,
+    budgets: saved.budgets,
+    expenses: saved.expenses,
+  }
+  saveLocal(state)
+  return state
 }
 
 export function localSignOut() {
   const state = loadLocal()
+  if (state.session) persistCurrentToVault(state)
   state.session = null
-  saveLocal(state)
+  // Keep household data in vault only; clear active workspace so auth gates work
+  state.household = null
+  state.members = []
+  state.budgets = []
+  state.expenses = []
+  localStorage.setItem(KEY, JSON.stringify(state))
 }
 
 export function localCreateHousehold(name: string, displayName: string): LocalState {
   const state = loadLocal()
   if (!state.session) throw new Error('Not signed in')
+  if (state.household) throw new Error('You already have a household')
+
   const hid = uid()
   const code = uid().replace(/-/g, '').slice(0, 8).toUpperCase()
   state.household = {
@@ -90,15 +196,14 @@ export function localCreateHousehold(name: string, displayName: string): LocalSt
       display_name: displayName,
       color: MEMBER_COLORS[0],
     },
+    {
+      id: uid(),
+      household_id: hid,
+      user_id: 'local-brother',
+      display_name: 'Brother',
+      color: MEMBER_COLORS[1],
+    },
   ]
-  // Seed a brother placeholder member for local combined tracking without second device
-  state.members.push({
-    id: uid(),
-    household_id: hid,
-    user_id: 'local-brother',
-    display_name: 'Brother',
-    color: MEMBER_COLORS[1],
-  })
   const ym = defaultBudgetMonth()
   state.budgets = [
     {
@@ -121,7 +226,6 @@ export function localJoinHousehold(code: string, displayName: string): LocalStat
   }
   const existing = state.members.find((m) => m.user_id === state.session!.userId)
   if (existing) return state
-  // Replace brother placeholder if present
   const brother = state.members.find((m) => m.user_id === 'local-brother')
   if (brother) {
     brother.user_id = state.session.userId
