@@ -58,7 +58,6 @@ export function HomePage() {
         spent={summary.spent}
         budget={summary.budget}
         carryover={summary.carryover}
-        totalAvailable={summary.totalAvailable}
         status={summary.status}
         income={summary.income}
         netIncome={summary.netIncome}

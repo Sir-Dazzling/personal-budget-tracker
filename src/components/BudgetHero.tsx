@@ -8,7 +8,6 @@ export function BudgetHero({
   spent,
   budget,
   carryover = 0,
-  totalAvailable,
   status,
   income = 0,
   netIncome,
@@ -18,22 +17,21 @@ export function BudgetHero({
   spent: number
   budget: number
   carryover?: number
-  totalAvailable?: number
   status: BudgetStatus
   income?: number
   netIncome?: number
 }) {
-  const available = totalAvailable ?? budget + carryover
+  const available = budget
   const over = remaining < 0
   const ratio = available > 0 ? Math.min(spent / available, 1.2) : 0
   const width = `${Math.min(ratio * 100, 100)}%`
-  const net = netIncome ?? income - spent
+  const net = netIncome ?? income - spent + carryover
 
   return (
     <section className={`panel hero-panel status-${status}`}>
       <p className="hero-label">{label}</p>
       <h2 className="hero-amount">
-        {budget <= 0 && carryover <= 0
+        {budget <= 0
           ? 'Set expected expenses'
           : over
             ? `${formatNaira(Math.abs(remaining))} over`
@@ -44,11 +42,6 @@ export function BudgetHero({
           ? `Spent ${formatNaira(spent)} of ${formatNaira(available)} expected`
           : 'Add expected expenses to track overspend'}
       </p>
-      {carryover > 0 && (
-        <p className="hero-meta" style={{ marginTop: '0.35rem', opacity: 0.85 }}>
-          Includes {formatNaira(carryover)} carried from last month
-        </p>
-      )}
       {available > 0 && (
         <div className="progress" aria-hidden>
           <span style={{ width }} />
@@ -69,6 +62,11 @@ export function BudgetHero({
           <strong className={net < 0 ? 'text-over' : ''}>{formatNaira(net)}</strong>
         </div>
       </div>
+      {carryover > 0 && (
+        <p className="hero-meta" style={{ marginTop: '0.5rem', opacity: 0.85 }}>
+          Includes {formatNaira(carryover)} saved from last month (in net)
+        </p>
+      )}
 
       {income <= 0 && (
         <p className="hero-meta" style={{ marginTop: '0.75rem' }}>

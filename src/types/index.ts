@@ -57,13 +57,13 @@ export interface MonthSummary {
   budget: number
   /** Income received this month. */
   income: number
-  /** income − actual spent. */
+  /** income − actual spent + prior-month unused expected (savings). */
   netIncome: number
-  /** income − expected expenses (planned leftover if you stick to plan). */
+  /** income − expected expenses + prior-month savings (planned leftover). */
   plannedNet: number
-  /** Unused expected-budget amount carried in from the previous month (never negative). */
+  /** Unused expected from the previous month — adds to net, not the spend ceiling. */
   carryover: number
-  /** budget + carryover — the ceiling used for remaining / pace / status. */
+  /** Same as budget — spend ceiling for remaining / pace / status (no carryover). */
   totalAvailable: number
   spent: number
   remaining: number

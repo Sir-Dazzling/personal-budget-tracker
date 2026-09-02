@@ -113,7 +113,7 @@ export function HistoryPage() {
             </div>
             <div className="stat-card">
               <h3>Net</h3>
-              <p>{summary.income ? formatNaira(summary.netIncome, true) : '—'}</p>
+              <p>{formatNaira(summary.netIncome, true)}</p>
             </div>
             <div className="stat-card">
               <h3>Expected</h3>

@@ -30,11 +30,11 @@ export function BudgetPage() {
 
   const incomeN = Math.round(Number(String(income).replace(/,/g, ''))) || 0
   const expectedN = Math.round(Number(String(expected).replace(/,/g, ''))) || 0
-  const totalAvailable =
-    (Number.isFinite(expectedN) && expectedN >= 0 ? expectedN : 0) + carryIn
   const plannedNet =
     (Number.isFinite(incomeN) && incomeN >= 0 ? incomeN : 0) -
-    (Number.isFinite(expectedN) && expectedN >= 0 ? expectedN : 0)
+    (Number.isFinite(expectedN) && expectedN >= 0 ? expectedN : 0) +
+    carryIn
+  const liveNet = incomeN - live.spent + carryIn
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -50,7 +50,7 @@ export function BudgetPage() {
     try {
       await setBudget(ym, exp, inc)
       setMessage(
-        `Saved for ${formatYearMonth(ym)} · Planned net ${formatNaira(inc - exp)} · Live net ${formatNaira(inc - live.spent)}`,
+        `Saved for ${formatYearMonth(ym)} · Planned net ${formatNaira(inc - exp + carryIn)} · Live net ${formatNaira(inc - live.spent + carryIn)}`,
       )
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save')
@@ -112,7 +112,7 @@ export function BudgetPage() {
             value={expected}
             onChange={(e) => setExpected(e.target.value)}
           />
-          <span className="hint">Spending ceiling — overspend is tracked against this (+ carryover)</span>
+          <span className="hint">Spending ceiling — overspend is tracked against this only</span>
         </div>
 
         <div className="stat-grid">
@@ -122,19 +122,14 @@ export function BudgetPage() {
           </div>
           <div className="stat-card">
             <h3>Live net</h3>
-            <p>{formatNaira(incomeN - live.spent, true)}</p>
+            <p>{formatNaira(liveNet, true)}</p>
           </div>
         </div>
 
         {carryIn > 0 && (
           <p className="hint" style={{ margin: 0 }}>
-            Expected carry-in from last month: <strong>{formatNaira(carryIn)}</strong>
-            {Number.isFinite(expectedN) && expectedN >= 0 && (
-              <>
-                {' '}
-                · Total spend ceiling: <strong>{formatNaira(totalAvailable)}</strong>
-              </>
-            )}
+            Saved from last month: <strong>{formatNaira(carryIn)}</strong> — added to net, not
+            expected spend
           </p>
         )}
 

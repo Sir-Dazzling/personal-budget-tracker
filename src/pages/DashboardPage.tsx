@@ -84,7 +84,7 @@ export function DashboardPage() {
         </div>
         <div className="stat-card">
           <h3>Net</h3>
-          <p>{summary.income ? formatNaira(summary.netIncome, true) : '—'}</p>
+          <p>{formatNaira(summary.netIncome, true)}</p>
         </div>
         <div className="stat-card">
           <h3>Pace</h3>
@@ -99,7 +99,7 @@ export function DashboardPage() {
             Expected by today ~ {formatNaira(Math.round(pace.expected))} · Actual{' '}
             {formatNaira(summary.spent)}
             {summary.carryover > 0
-              ? ` · Includes ${formatNaira(summary.carryover)} carryover`
+              ? ` · ${formatNaira(summary.carryover)} saved from last month (in net)`
               : ''}
           </p>
           <div className="progress" style={{ background: 'var(--bg-deep)', marginTop: 0 }}>
