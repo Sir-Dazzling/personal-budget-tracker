@@ -30,14 +30,14 @@ import {
 const CAT_COLORS = ['#0d4f3c', '#1a6b52', '#2c5f8a', '#c45c26', '#7a5c3a', '#4a6356', '#8aa899']
 
 export function DashboardPage() {
-  const { expenses, members, budgets } = useApp()
+  const { expenses, members, budgets, incomes } = useApp()
   const [ym, setYm] = useState(defaultBudgetMonth)
-  const summary = monthSummary(expenses, ym, budgets)
+  const summary = monthSummary(expenses, ym, budgets, incomes)
   const daily = useMemo(() => spendByDay(expenses, ym), [expenses, ym])
   const byCat = useMemo(() => spendByCategory(expenses, ym), [expenses, ym])
   const byPerson = useMemo(() => spendByMember(expenses, ym, members), [expenses, ym, members])
   const pace = budgetPace(summary.spent, summary.totalAvailable, ym)
-  const cards = behaviourHighlights(expenses, ym, budgets)
+  const cards = behaviourHighlights(expenses, ym, budgets, incomes)
 
   const paceLabel =
     pace.label === 'ahead'
@@ -75,7 +75,7 @@ export function DashboardPage() {
 
       <div className="stat-grid">
         <div className="stat-card">
-          <h3>Income</h3>
+          <h3>In</h3>
           <p>{summary.income ? formatNaira(summary.income, true) : '—'}</p>
         </div>
         <div className="stat-card">

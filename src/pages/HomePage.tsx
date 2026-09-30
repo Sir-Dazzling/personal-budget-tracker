@@ -11,9 +11,9 @@ import {
 } from '../lib/format'
 
 export function HomePage() {
-  const { household, members, budgets, expenses, deleteExpense, signOut, cloud } = useApp()
+  const { household, members, budgets, expenses, incomes, deleteExpense, signOut, cloud } = useApp()
   const [ym, setYm] = useState(defaultBudgetMonth)
-  const summary = monthSummary(expenses, ym, budgets)
+  const summary = monthSummary(expenses, ym, budgets, incomes)
   const recent = expensesInMonth(expenses, ym).slice(0, 8)
 
   return (
@@ -60,6 +60,8 @@ export function HomePage() {
         carryover={summary.carryover}
         status={summary.status}
         income={summary.income}
+        startingBalance={summary.startingBalance}
+        incomeAdded={summary.incomeAdded}
         netIncome={summary.netIncome}
       />
 

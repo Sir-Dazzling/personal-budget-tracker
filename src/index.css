@@ -408,8 +408,9 @@ a {
   }
 }
 
-.expense-item {
-  display: contents;
+/* Swipe row content owns layout — never use display:contents here (breaks transform + taps). */
+.swipe-content.expense-item {
+  display: grid;
 }
 
 .expense-item .title {

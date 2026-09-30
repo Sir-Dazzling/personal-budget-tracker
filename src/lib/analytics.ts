@@ -1,4 +1,4 @@
-import type { Expense, MonthSummary, MonthlyBudget } from '../types'
+import type { Expense, IncomeEntry, MonthSummary, MonthlyBudget } from '../types'
 import {
   TRACKING_START_MONTH,
   budgetStatus,
@@ -29,20 +29,54 @@ export function expensesInMonth(expenses: Expense[], yearMonth: string): Expense
   return expenses.filter((e) => e.spent_on.startsWith(yearMonth))
 }
 
+export function incomesInMonth(incomes: IncomeEntry[], yearMonth: string): IncomeEntry[] {
+  return incomes
+    .filter((i) => i.received_on.startsWith(yearMonth))
+    .sort((a, b) => b.received_on.localeCompare(a.received_on) || b.created_at.localeCompare(a.created_at))
+}
+
 export function sumExpenses(expenses: Expense[]): number {
   return expenses.reduce((s, e) => s + e.amount_ngn, 0)
 }
 
-type BudgetLookup = ((ym: string) => number) | Pick<MonthlyBudget, 'year_month' | 'amount_ngn' | 'income_ngn'>[]
+export function sumIncomes(incomes: IncomeEntry[]): number {
+  return incomes.reduce((s, i) => s + i.amount_ngn, 0)
+}
+
+type BudgetLookup =
+  | ((ym: string) => number)
+  | Pick<MonthlyBudget, 'year_month' | 'amount_ngn' | 'income_ngn' | 'starting_balance_ngn'>[]
 
 function resolveBudget(budgets: BudgetLookup, ym: string): number {
   if (typeof budgets === 'function') return budgets(ym)
   return budgets.find((b) => b.year_month === ym)?.amount_ngn ?? 0
 }
 
-function resolveIncome(budgets: BudgetLookup, ym: string): number {
+function resolveStartingBalance(budgets: BudgetLookup, ym: string): number {
+  if (typeof budgets === 'function') return 0
+  return budgets.find((b) => b.year_month === ym)?.starting_balance_ngn ?? 0
+}
+
+function resolveLegacyIncome(budgets: BudgetLookup, ym: string): number {
   if (typeof budgets === 'function') return 0
   return budgets.find((b) => b.year_month === ym)?.income_ngn ?? 0
+}
+
+/** Income added during the month + starting balance (legacy income_ngn if no ledger entries). */
+export function resolveMonthIncome(
+  budgets: BudgetLookup,
+  incomes: IncomeEntry[],
+  ym: string,
+): { startingBalance: number; incomeAdded: number; income: number } {
+  const startingBalance = resolveStartingBalance(budgets, ym)
+  const monthIncomes = incomesInMonth(incomes, ym)
+  const incomeAdded =
+    monthIncomes.length > 0 ? sumIncomes(monthIncomes) : resolveLegacyIncome(budgets, ym)
+  return {
+    startingBalance,
+    incomeAdded,
+    income: startingBalance + incomeAdded,
+  }
 }
 
 /**
@@ -69,9 +103,10 @@ export function monthSummary(
   expenses: Expense[],
   yearMonth: string,
   budgets: BudgetLookup,
+  incomes: IncomeEntry[] = [],
 ): MonthSummary {
   const budgetAmount = resolveBudget(budgets, yearMonth)
-  const income = resolveIncome(budgets, yearMonth)
+  const { startingBalance, incomeAdded, income } = resolveMonthIncome(budgets, incomes, yearMonth)
   const carryover = carryoverInto(expenses, yearMonth, budgets)
   /** Spend ceiling is this month's expected only — savings do not inflate it. */
   const totalAvailable = budgetAmount
@@ -84,6 +119,8 @@ export function monthSummary(
   return {
     yearMonth,
     budget: budgetAmount,
+    startingBalance,
+    incomeAdded,
     income,
     netIncome,
     plannedNet,
@@ -158,8 +195,9 @@ export function behaviourHighlights(
   expenses: Expense[],
   yearMonth: string,
   budgets: BudgetLookup,
+  incomes: IncomeEntry[] = [],
 ) {
-  const summary = monthSummary(expenses, yearMonth, budgets)
+  const summary = monthSummary(expenses, yearMonth, budgets, incomes)
   const thisMonth = expensesInMonth(expenses, yearMonth)
   const lastMonth = expensesInMonth(expenses, shiftYearMonth(yearMonth, -1))
   const spent = summary.spent

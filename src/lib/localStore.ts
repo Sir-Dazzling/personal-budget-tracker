@@ -1,4 +1,4 @@
-import type { Expense, Household, Member, MonthlyBudget } from '../types'
+import type { Expense, Household, IncomeEntry, Member, MonthlyBudget } from '../types'
 import { MEMBER_COLORS, TRACKING_START_MONTH, defaultBudgetMonth, uid } from './format'
 
 const KEY = 'split-local-v1'
@@ -17,6 +17,7 @@ export interface LocalState {
   members: Member[]
   budgets: MonthlyBudget[]
   expenses: Expense[]
+  incomes: IncomeEntry[]
 }
 
 type Vault = Record<
@@ -27,6 +28,7 @@ type Vault = Record<
     members: Member[]
     budgets: MonthlyBudget[]
     expenses: Expense[]
+    incomes: IncomeEntry[]
   }
 >
 
@@ -38,6 +40,15 @@ function empty(): LocalState {
     members: [],
     budgets: [],
     expenses: [],
+    incomes: [],
+  }
+}
+
+function normalizeBudget(b: MonthlyBudget): MonthlyBudget {
+  return {
+    ...b,
+    income_ngn: b.income_ngn ?? 0,
+    starting_balance_ngn: b.starting_balance_ngn ?? 0,
   }
 }
 
@@ -65,6 +76,7 @@ function persistCurrentToVault(state: LocalState) {
     members: state.members,
     budgets: state.budgets,
     expenses: state.expenses,
+    incomes: state.incomes ?? [],
   }
   saveVault(vault)
 }
@@ -85,7 +97,8 @@ export function loadLocal(): LocalState {
     const raw = localStorage.getItem(KEY)
     if (!raw) return empty()
     const parsed = scrubPreTracking({ ...empty(), ...JSON.parse(raw) })
-    parsed.budgets = parsed.budgets.map((b) => ({ ...b, income_ngn: b.income_ngn ?? 0 }))
+    parsed.incomes = parsed.incomes ?? []
+    parsed.budgets = parsed.budgets.map(normalizeBudget)
     if (parsed.budgets.length !== (JSON.parse(raw).budgets?.length ?? 0)) {
       localStorage.setItem(KEY, JSON.stringify(parsed))
       if (parsed.session) persistCurrentToVault(parsed)
@@ -159,8 +172,9 @@ export function localSignIn(email: string): LocalState {
     session: saved.session,
     household: saved.household,
     members: saved.members,
-    budgets: saved.budgets,
-    expenses: saved.expenses,
+    budgets: (saved.budgets ?? []).map(normalizeBudget),
+    expenses: saved.expenses ?? [],
+    incomes: saved.incomes ?? [],
   }
   saveLocal(state)
   return state
@@ -175,6 +189,7 @@ export function localSignOut() {
   state.members = []
   state.budgets = []
   state.expenses = []
+  state.incomes = []
   localStorage.setItem(KEY, JSON.stringify(state))
 }
 
@@ -215,9 +230,11 @@ export function localCreateHousehold(name: string, displayName: string): LocalSt
       year_month: ym,
       amount_ngn: 200_000,
       income_ngn: 0,
+      starting_balance_ngn: 0,
     },
   ]
   state.expenses = []
+  state.incomes = []
   saveLocal(state)
   return state
 }
@@ -252,7 +269,7 @@ export function localJoinHousehold(code: string, displayName: string): LocalStat
 export function localUpsertBudget(
   yearMonth: string,
   amount: number,
-  income: number,
+  startingBalance: number,
 ): LocalState {
   const state = loadLocal()
   if (!state.household) throw new Error('No household')
@@ -261,16 +278,54 @@ export function localUpsertBudget(
   )
   if (existing) {
     existing.amount_ngn = amount
-    existing.income_ngn = income
+    existing.starting_balance_ngn = startingBalance
   } else {
     state.budgets.push({
       id: uid(),
       household_id: state.household.id,
       year_month: yearMonth,
       amount_ngn: amount,
-      income_ngn: income,
+      income_ngn: 0,
+      starting_balance_ngn: startingBalance,
     })
   }
+  saveLocal(state)
+  return state
+}
+
+export function localAddIncome(input: {
+  amount_ngn: number
+  note: string
+  received_on: string
+}): LocalState {
+  const state = loadLocal()
+  if (!state.household || !state.session) throw new Error('Not ready')
+  const ym = input.received_on.slice(0, 7)
+  // Once ledger entries exist for a month, clear legacy lump income so we don't double-count
+  const budget = state.budgets.find(
+    (b) => b.household_id === state.household!.id && b.year_month === ym,
+  )
+  const monthHasEntries = (state.incomes ?? []).some((i) => i.received_on.startsWith(ym))
+  if (budget && !monthHasEntries && (budget.income_ngn ?? 0) > 0) {
+    budget.income_ngn = 0
+  }
+  state.incomes = state.incomes ?? []
+  state.incomes.unshift({
+    id: uid(),
+    household_id: state.household.id,
+    amount_ngn: input.amount_ngn,
+    note: input.note,
+    received_on: input.received_on,
+    created_by: state.session.userId,
+    created_at: new Date().toISOString(),
+  })
+  saveLocal(state)
+  return state
+}
+
+export function localDeleteIncome(id: string): LocalState {
+  const state = loadLocal()
+  state.incomes = (state.incomes ?? []).filter((i) => i.id !== id)
   saveLocal(state)
   return state
 }

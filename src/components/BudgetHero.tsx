@@ -10,6 +10,8 @@ export function BudgetHero({
   carryover = 0,
   status,
   income = 0,
+  startingBalance = 0,
+  incomeAdded = 0,
   netIncome,
 }: {
   label: string
@@ -19,6 +21,8 @@ export function BudgetHero({
   carryover?: number
   status: BudgetStatus
   income?: number
+  startingBalance?: number
+  incomeAdded?: number
   netIncome?: number
 }) {
   const available = budget
@@ -50,7 +54,7 @@ export function BudgetHero({
 
       <div className="income-strip">
         <div>
-          <span className="income-strip-label">Income</span>
+          <span className="income-strip-label">In</span>
           <strong>{income > 0 ? formatNaira(income) : '—'}</strong>
         </div>
         <div>
@@ -62,8 +66,15 @@ export function BudgetHero({
           <strong className={net < 0 ? 'text-over' : ''}>{formatNaira(net)}</strong>
         </div>
       </div>
-      {carryover > 0 && (
+      {(startingBalance > 0 || incomeAdded > 0) && (
         <p className="hero-meta" style={{ marginTop: '0.5rem', opacity: 0.85 }}>
+          {startingBalance > 0 ? `Start ${formatNaira(startingBalance)}` : null}
+          {startingBalance > 0 && incomeAdded > 0 ? ' · ' : null}
+          {incomeAdded > 0 ? `Added ${formatNaira(incomeAdded)}` : null}
+        </p>
+      )}
+      {carryover > 0 && (
+        <p className="hero-meta" style={{ marginTop: '0.35rem', opacity: 0.85 }}>
           Includes {formatNaira(carryover)} saved from last month (in net)
         </p>
       )}
@@ -71,7 +82,7 @@ export function BudgetHero({
       {income <= 0 && (
         <p className="hero-meta" style={{ marginTop: '0.75rem' }}>
           <Link to="/budget" style={{ color: 'inherit', textDecoration: 'underline' }}>
-            Set income
+            Set starting balance / add income
           </Link>{' '}
           to see net after spending
         </p>

@@ -33,17 +33,32 @@ create table public.members (
 create index members_user_id_idx on public.members (user_id);
 create index members_household_id_idx on public.members (household_id);
 
--- Monthly budgets (amount_ngn = expected expenses; income_ngn = income received)
+-- Monthly budgets (amount_ngn = expected expenses; starting_balance_ngn = opening cash;
+-- income_ngn = legacy lump income when no income ledger rows exist)
 create table public.monthly_budgets (
   id uuid primary key default gen_random_uuid(),
   household_id uuid not null references public.households (id) on delete cascade,
   year_month text not null, -- YYYY-MM
   amount_ngn bigint not null check (amount_ngn >= 0),
   income_ngn bigint not null default 0 check (income_ngn >= 0),
+  starting_balance_ngn bigint not null default 0 check (starting_balance_ngn >= 0),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (household_id, year_month)
 );
+
+-- Income entries (money added during a month)
+create table public.incomes (
+  id uuid primary key default gen_random_uuid(),
+  household_id uuid not null references public.households (id) on delete cascade,
+  amount_ngn bigint not null check (amount_ngn > 0),
+  note text not null default '',
+  received_on date not null default (timezone('Africa/Lagos', now()))::date,
+  created_by uuid not null references auth.users (id),
+  created_at timestamptz not null default now()
+);
+
+create index incomes_household_month_idx on public.incomes (household_id, received_on);
 
 -- Expenses
 create table public.expenses (
@@ -98,6 +113,7 @@ alter table public.profiles enable row level security;
 alter table public.households enable row level security;
 alter table public.members enable row level security;
 alter table public.monthly_budgets enable row level security;
+alter table public.incomes enable row level security;
 alter table public.expenses enable row level security;
 
 create policy "Profiles: read own" on public.profiles
@@ -124,6 +140,10 @@ create policy "Households: read by join code for join" on public.households
   for select using (true);
 
 create policy "Budgets: household CRUD" on public.monthly_budgets
+  for all using (household_id in (select public.user_household_ids()))
+  with check (household_id in (select public.user_household_ids()));
+
+create policy "Incomes: household CRUD" on public.incomes
   for all using (household_id in (select public.user_household_ids()))
   with check (household_id in (select public.user_household_ids()));
 

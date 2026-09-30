@@ -20,14 +20,17 @@ import {
 } from '../lib/format'
 
 export function HistoryPage() {
-  const { expenses, members, budgets, deleteExpense } = useApp()
+  const { expenses, members, budgets, incomes, deleteExpense } = useApp()
   const [mode, setMode] = useState<'month' | 'day'>('month')
   const [ym, setYm] = useState(defaultBudgetMonth)
   const [day, setDay] = useState(() => defaultDateInMonth(defaultBudgetMonth()))
 
   const monthExpenses = useMemo(() => expensesInMonth(expenses, ym), [expenses, ym])
   const dayExpenses = useMemo(() => expensesOnDate(expenses, day), [expenses, day])
-  const summary = useMemo(() => monthSummary(expenses, ym, budgets), [expenses, ym, budgets])
+  const summary = useMemo(
+    () => monthSummary(expenses, ym, budgets, incomes),
+    [expenses, ym, budgets, incomes],
+  )
   const monthSpent = sumExpenses(monthExpenses)
   const daySpent = sumExpenses(dayExpenses)
   const byCat = spendByCategory(expenses, ym)
@@ -104,7 +107,7 @@ export function HistoryPage() {
         <>
           <div className="stat-grid">
             <div className="stat-card">
-              <h3>Income</h3>
+              <h3>In</h3>
               <p>{summary.income ? formatNaira(summary.income, true) : '—'}</p>
             </div>
             <div className="stat-card">

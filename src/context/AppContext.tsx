@@ -7,11 +7,13 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import type { Expense, Household, Member, MonthlyBudget } from '../types'
+import type { Expense, Household, IncomeEntry, Member, MonthlyBudget } from '../types'
 import {
   localAddExpense,
+  localAddIncome,
   localCreateHousehold,
   localDeleteExpense,
+  localDeleteIncome,
   localJoinHousehold,
   localRenameMember,
   localSignIn,
@@ -43,6 +45,7 @@ interface AppData {
   members: Member[]
   budgets: MonthlyBudget[]
   expenses: Expense[]
+  incomes: IncomeEntry[]
   myMember: Member | null
   refresh: () => Promise<void>
   signUp: (email: string, password: string, displayName: string) => Promise<AuthResult>
@@ -50,7 +53,13 @@ interface AppData {
   signOut: () => Promise<void>
   createHousehold: (name: string, displayName: string) => Promise<void>
   joinHousehold: (code: string, displayName: string) => Promise<void>
-  setBudget: (yearMonth: string, expectedExpenses: number, income: number) => Promise<void>
+  setBudget: (yearMonth: string, expectedExpenses: number, startingBalance: number) => Promise<void>
+  addIncome: (input: {
+    amount_ngn: number
+    note: string
+    received_on: string
+  }) => Promise<void>
+  deleteIncome: (id: string) => Promise<void>
   addExpense: (input: {
     amount_ngn: number
     category: string
@@ -88,6 +97,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [members, setMembers] = useState<Member[]>([])
   const [budgets, setBudgets] = useState<MonthlyBudget[]>([])
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [incomes, setIncomes] = useState<IncomeEntry[]>([])
 
   const applyLocal = useCallback(() => {
     const s = loadLocal()
@@ -102,8 +112,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     )
     setHousehold(s.household)
     setMembers(s.members)
-    setBudgets(s.budgets.map((b) => ({ ...b, income_ngn: b.income_ngn ?? 0 })))
+    setBudgets(
+      s.budgets.map((b) => ({
+        ...b,
+        income_ngn: b.income_ngn ?? 0,
+        starting_balance_ngn: b.starting_balance_ngn ?? 0,
+      })),
+    )
     setExpenses(s.expenses)
+    setIncomes(s.incomes ?? [])
   }, [])
 
   const loadCloudHousehold = useCallback(async (userId: string) => {
@@ -118,11 +135,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setMembers([])
       setBudgets([])
       setExpenses([])
+      setIncomes([])
       return
     }
     const hid = memberships[0].household_id as string
 
-    const [{ data: hh }, { data: mems }, { data: buds }, { data: exps }] =
+    const [{ data: hh }, { data: mems }, { data: buds }, { data: exps }, { data: incs }] =
       await Promise.all([
         supabase.from('households').select('*').eq('id', hid).single(),
         supabase.from('members').select('*').eq('household_id', hid),
@@ -133,11 +151,24 @@ export function AppProvider({ children }: { children: ReactNode }) {
           .eq('household_id', hid)
           .order('spent_on', { ascending: false })
           .order('created_at', { ascending: false }),
+        supabase
+          .from('incomes')
+          .select('*')
+          .eq('household_id', hid)
+          .order('received_on', { ascending: false })
+          .order('created_at', { ascending: false }),
       ])
     setHousehold(hh as Household)
     setMembers((mems as Member[]) ?? [])
-    setBudgets((buds as MonthlyBudget[])?.map((b) => ({ ...b, income_ngn: b.income_ngn ?? 0 })) ?? [])
+    setBudgets(
+      (buds as MonthlyBudget[])?.map((b) => ({
+        ...b,
+        income_ngn: b.income_ngn ?? 0,
+        starting_balance_ngn: b.starting_balance_ngn ?? 0,
+      })) ?? [],
+    )
     setExpenses((exps as Expense[]) ?? [])
+    setIncomes((incs as IncomeEntry[]) ?? [])
   }, [])
 
   const refresh = useCallback(async () => {
@@ -167,6 +198,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             setMembers([])
             setBudgets([])
             setExpenses([])
+            setIncomes([])
           }
           return
         }
@@ -196,6 +228,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           setMembers([])
           setBudgets([])
           setExpenses([])
+          setIncomes([])
           return
         }
         const displayName =
@@ -219,18 +252,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [cloud, applyLocal, loadCloudHousehold])
 
-  // Realtime expenses when cloud
+  // Realtime expenses + incomes when cloud
   useEffect(() => {
     if (!cloud || !supabase || !household || !user) return
     const client = supabase
     const channel = client
-      .channel(`expenses-${household.id}`)
+      .channel(`money-${household.id}`)
       .on(
         'postgres_changes',
         {
           event: '*',
           schema: 'public',
           table: 'expenses',
+          filter: `household_id=eq.${household.id}`,
+        },
+        () => {
+          void loadCloudHousehold(user.id)
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'incomes',
           filter: `household_id=eq.${household.id}`,
         },
         () => {
@@ -336,6 +381,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setMembers([])
     setBudgets([])
     setExpenses([])
+    setIncomes([])
   }, [cloud, applyLocal])
 
   const createHousehold = useCallback(
@@ -364,6 +410,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             year_month: defaultBudgetMonth(),
             amount_ngn: 200_000,
             income_ngn: 0,
+            starting_balance_ngn: 0,
           },
           { onConflict: 'household_id,year_month' },
         )
@@ -392,9 +439,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const setBudget = useCallback(
-    async (yearMonth: string, expectedExpenses: number, income: number) => {
+    async (yearMonth: string, expectedExpenses: number, startingBalance: number) => {
       if (!cloud || !supabase) {
-        localUpsertBudget(yearMonth, expectedExpenses, income)
+        localUpsertBudget(yearMonth, expectedExpenses, startingBalance)
         applyLocal()
         return
       }
@@ -404,7 +451,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           household_id: household.id,
           year_month: yearMonth,
           amount_ngn: expectedExpenses,
-          income_ngn: income,
+          starting_balance_ngn: startingBalance,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'household_id,year_month' },
@@ -413,6 +460,56 @@ export function AppProvider({ children }: { children: ReactNode }) {
       await loadCloudHousehold(user!.id)
     },
     [cloud, applyLocal, household, loadCloudHousehold, user],
+  )
+
+  const addIncome = useCallback(
+    async (input: { amount_ngn: number; note: string; received_on: string }) => {
+      if (!cloud || !supabase) {
+        localAddIncome(input)
+        applyLocal()
+        return
+      }
+      if (!household || !user) throw new Error('Not ready')
+      const ym = input.received_on.slice(0, 7)
+      const { data: monthIncomes } = await supabase
+        .from('incomes')
+        .select('id')
+        .eq('household_id', household.id)
+        .gte('received_on', `${ym}-01`)
+        .lte('received_on', `${ym}-31`)
+        .limit(1)
+      if (!monthIncomes?.length) {
+        await supabase
+          .from('monthly_budgets')
+          .update({ income_ngn: 0, updated_at: new Date().toISOString() })
+          .eq('household_id', household.id)
+          .eq('year_month', ym)
+      }
+      const { error } = await supabase.from('incomes').insert({
+        household_id: household.id,
+        amount_ngn: input.amount_ngn,
+        note: input.note,
+        received_on: input.received_on,
+        created_by: user.id,
+      })
+      if (error) throw error
+      await loadCloudHousehold(user.id)
+    },
+    [cloud, applyLocal, household, loadCloudHousehold, user],
+  )
+
+  const deleteIncome = useCallback(
+    async (id: string) => {
+      if (!cloud || !supabase) {
+        localDeleteIncome(id)
+        applyLocal()
+        return
+      }
+      const { error } = await supabase.from('incomes').delete().eq('id', id)
+      if (error) throw error
+      await loadCloudHousehold(user!.id)
+    },
+    [cloud, applyLocal, loadCloudHousehold, user],
   )
 
   const addExpense = useCallback(
@@ -446,14 +543,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const deleteExpense = useCallback(
     async (id: string) => {
-      if (!cloud || !supabase) {
-        localDeleteExpense(id)
-        applyLocal()
-        return
+      // Optimistic remove so the row disappears even if refresh is slow
+      setExpenses((prev) => prev.filter((e) => e.id !== id))
+      try {
+        if (!cloud || !supabase) {
+          localDeleteExpense(id)
+          applyLocal()
+          return
+        }
+        const { error } = await supabase.from('expenses').delete().eq('id', id)
+        if (error) throw error
+        await loadCloudHousehold(user!.id)
+      } catch (err) {
+        if (!cloud) applyLocal()
+        else if (user) await loadCloudHousehold(user.id)
+        throw err
       }
-      const { error } = await supabase.from('expenses').delete().eq('id', id)
-      if (error) throw error
-      await loadCloudHousehold(user!.id)
     },
     [cloud, applyLocal, loadCloudHousehold, user],
   )
@@ -520,6 +625,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     members,
     budgets,
     expenses,
+    incomes,
     myMember,
     refresh,
     signUp,
@@ -528,6 +634,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
     createHousehold,
     joinHousehold,
     setBudget,
+    addIncome,
+    deleteIncome,
     addExpense,
     deleteExpense,
     updateExpense,

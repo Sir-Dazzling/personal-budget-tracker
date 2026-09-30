@@ -16,20 +16,26 @@ export function SwipeableExpenseRow({
   const startX = useRef(0)
   const startOffset = useRef(0)
   const rowRef = useRef<HTMLDivElement>(null)
+  const offsetRef = useRef(0)
+
+  useEffect(() => {
+    offsetRef.current = offset
+  }, [offset])
 
   useEffect(() => {
     function closeOnOutside(e: MouseEvent | TouchEvent) {
-      if (!rowRef.current?.contains(e.target as Node)) {
+      const target = e.target as Node
+      if (!rowRef.current?.contains(target)) {
         setOffset(0)
       }
     }
     if (offset < 0) {
-      document.addEventListener('touchstart', closeOnOutside)
-      document.addEventListener('mousedown', closeOnOutside)
+      document.addEventListener('touchstart', closeOnOutside, true)
+      document.addEventListener('mousedown', closeOnOutside, true)
     }
     return () => {
-      document.removeEventListener('touchstart', closeOnOutside)
-      document.removeEventListener('mousedown', closeOnOutside)
+      document.removeEventListener('touchstart', closeOnOutside, true)
+      document.removeEventListener('mousedown', closeOnOutside, true)
     }
   }, [offset])
 
@@ -38,7 +44,7 @@ export function SwipeableExpenseRow({
   }
 
   function onPointerDown(e: React.PointerEvent) {
-    if ((e.target as HTMLElement).closest('.swipe-action')) return
+    if ((e.target as HTMLElement).closest('.swipe-action, .swipe-desktop-btn')) return
     if (window.matchMedia('(min-width: 760px)').matches) return
     startX.current = e.clientX
     startOffset.current = offset
@@ -56,16 +62,41 @@ export function SwipeableExpenseRow({
   function onPointerUp() {
     if (!dragging) return
     setDragging(false)
-    snap(offset < -ACTION_WIDTH / 3)
+    snap(offsetRef.current < -ACTION_WIDTH / 3)
+  }
+
+  function handleEdit(e: React.MouseEvent | React.PointerEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    setOffset(0)
+    onEdit()
+  }
+
+  function handleDelete(e: React.MouseEvent | React.PointerEvent) {
+    e.preventDefault()
+    e.stopPropagation()
+    // Confirm while row still open — closing first can swallow the tap on mobile
+    onDelete()
+    setOffset(0)
   }
 
   return (
     <div className="swipe-row" ref={rowRef}>
       <div className="swipe-actions" aria-hidden={offset === 0}>
-        <button type="button" className="swipe-action swipe-action-edit" onClick={onEdit}>
+        <button
+          type="button"
+          className="swipe-action swipe-action-edit"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={handleEdit}
+        >
           Edit
         </button>
-        <button type="button" className="swipe-action swipe-action-delete" onClick={onDelete}>
+        <button
+          type="button"
+          className="swipe-action swipe-action-delete"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={handleDelete}
+        >
           Delete
         </button>
       </div>
@@ -79,10 +110,20 @@ export function SwipeableExpenseRow({
       >
         {children}
         <div className="swipe-desktop-actions">
-          <button type="button" className="swipe-desktop-btn" onClick={onEdit}>
+          <button
+            type="button"
+            className="swipe-desktop-btn"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleEdit}
+          >
             Edit
           </button>
-          <button type="button" className="swipe-desktop-btn danger" onClick={onDelete}>
+          <button
+            type="button"
+            className="swipe-desktop-btn danger"
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={handleDelete}
+          >
             Delete
           </button>
         </div>

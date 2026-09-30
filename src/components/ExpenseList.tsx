@@ -10,7 +10,7 @@ export function ExpenseList({
 }: {
   expenses: Expense[]
   members: Member[]
-  onDelete?: (id: string) => void
+  onDelete?: (id: string) => void | Promise<void>
 }) {
   const navigate = useNavigate()
 
@@ -20,6 +20,16 @@ export function ExpenseList({
 
   const nameOf = (id: string) => members.find((m) => m.id === id)?.display_name ?? 'Someone'
   const colorOf = (id: string) => members.find((m) => m.id === id)?.color ?? '#0d4f3c'
+
+  async function handleDelete(id: string) {
+    if (!onDelete) return
+    if (!window.confirm('Delete this expense?')) return
+    try {
+      await onDelete(id)
+    } catch (err) {
+      window.alert(err instanceof Error ? err.message : 'Could not delete expense')
+    }
+  }
 
   return (
     <div className="list">
@@ -51,9 +61,7 @@ export function ExpenseList({
           <SwipeableExpenseRow
             key={e.id}
             onEdit={() => navigate(`/add/${e.id}`)}
-            onDelete={() => {
-              if (window.confirm('Delete this expense?')) onDelete(e.id)
-            }}
+            onDelete={() => void handleDelete(e.id)}
           >
             {content}
           </SwipeableExpenseRow>

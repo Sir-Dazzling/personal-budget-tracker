@@ -33,8 +33,23 @@ export interface MonthlyBudget {
   year_month: string
   /** Expected expenses ceiling for the month. */
   amount_ngn: number
-  /** Income received for the month. */
+  /**
+   * Legacy single income total (pre income-ledger).
+   * Used only when there are no income entries for the month.
+   */
   income_ngn: number
+  /** Cash on hand at the start of the month. */
+  starting_balance_ngn: number
+}
+
+export interface IncomeEntry {
+  id: string
+  household_id: string
+  amount_ngn: number
+  note: string
+  received_on: string
+  created_by: string
+  created_at: string
 }
 
 export interface Expense {
@@ -55,7 +70,11 @@ export interface MonthSummary {
   yearMonth: string
   /** Expected expenses set for this month (excludes carryover). */
   budget: number
-  /** Income received this month. */
+  /** Starting balance for the month. */
+  startingBalance: number
+  /** Income entries this month (excludes starting balance). */
+  incomeAdded: number
+  /** startingBalance + incomeAdded (legacy income_ngn if no entries). */
   income: number
   /** income − actual spent + prior-month unused expected (savings). */
   netIncome: number
