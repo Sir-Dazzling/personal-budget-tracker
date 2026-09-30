@@ -45,7 +45,10 @@ export function sumIncomes(incomes: IncomeEntry[]): number {
 
 type BudgetLookup =
   | ((ym: string) => number)
-  | Pick<MonthlyBudget, 'year_month' | 'amount_ngn' | 'income_ngn' | 'starting_balance_ngn'>[]
+  | Pick<
+      MonthlyBudget,
+      'year_month' | 'amount_ngn' | 'income_ngn' | 'starting_balance_ngn' | 'include_prior_savings'
+    >[]
 
 function resolveBudget(budgets: BudgetLookup, ym: string): number {
   if (typeof budgets === 'function') return budgets(ym)
@@ -79,12 +82,14 @@ export function resolveMonthIncome(
   }
 }
 
-/**
- * Unused expected-expense amount from the previous month only.
- * Adds to next month's net (savings), not to the spend ceiling.
- * Nothing carries into the tracking start month (September 2026).
- */
-export function carryoverInto(
+function resolveIncludePriorSavings(budgets: BudgetLookup, ym: string): boolean {
+  if (typeof budgets === 'function') return true
+  const row = budgets.find((b) => b.year_month === ym)
+  return row?.include_prior_savings !== false
+}
+
+/** Raw unused expected from the previous month (ignores the include toggle). */
+export function priorSavingsAvailable(
   expenses: Expense[],
   yearMonth: string,
   budgets: BudgetLookup,
@@ -99,6 +104,20 @@ export function carryoverInto(
   return Math.max(0, budget - spent)
 }
 
+/**
+ * Unused expected-expense amount applied into `yearMonth` net.
+ * Returns 0 when that month's include_prior_savings is off.
+ * Nothing carries into the tracking start month (September 2026).
+ */
+export function carryoverInto(
+  expenses: Expense[],
+  yearMonth: string,
+  budgets: BudgetLookup,
+): number {
+  if (!resolveIncludePriorSavings(budgets, yearMonth)) return 0
+  return priorSavingsAvailable(expenses, yearMonth, budgets)
+}
+
 export function monthSummary(
   expenses: Expense[],
   yearMonth: string,
@@ -107,13 +126,14 @@ export function monthSummary(
 ): MonthSummary {
   const budgetAmount = resolveBudget(budgets, yearMonth)
   const { startingBalance, incomeAdded, income } = resolveMonthIncome(budgets, incomes, yearMonth)
+  const includePriorSavings = resolveIncludePriorSavings(budgets, yearMonth)
   const carryover = carryoverInto(expenses, yearMonth, budgets)
   /** Spend ceiling is this month's expected only — savings do not inflate it. */
   const totalAvailable = budgetAmount
   const spent = sumExpenses(expensesInMonth(expenses, yearMonth))
   const remaining = totalAvailable - spent
   const ratio = totalAvailable > 0 ? spent / totalAvailable : 0
-  /** Leftover expected from last month boosts net, not the budget. */
+  /** Leftover expected from last month boosts net only when opted in. */
   const netIncome = income - spent + carryover
   const plannedNet = income - budgetAmount + carryover
   return {
@@ -125,6 +145,7 @@ export function monthSummary(
     netIncome,
     plannedNet,
     carryover,
+    includePriorSavings,
     totalAvailable,
     spent,
     remaining,

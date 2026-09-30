@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useApp } from '../context/AppContext'
-import { carryoverInto, incomesInMonth, monthSummary } from '../lib/analytics'
+import { carryoverInto, incomesInMonth, monthSummary, priorSavingsAvailable } from '../lib/analytics'
 import {
   defaultBudgetMonth,
   defaultDateInMonth,
@@ -24,6 +24,7 @@ export function BudgetPage() {
   } = useApp()
   const [ym, setYm] = useState(defaultBudgetMonth)
   const row = budgets.find((b) => b.year_month === ym)
+  const priorAvailable = priorSavingsAvailable(expenses, ym, budgets)
   const carryIn = carryoverInto(expenses, ym, budgets)
   const live = monthSummary(expenses, ym, budgets, incomes)
   const monthIncomes = useMemo(() => incomesInMonth(incomes, ym), [incomes, ym])
@@ -32,6 +33,7 @@ export function BudgetPage() {
     row?.starting_balance_ngn ? String(row.starting_balance_ngn) : '',
   )
   const [expected, setExpected] = useState(row?.amount_ngn ? String(row.amount_ngn) : '')
+  const [includePrior, setIncludePrior] = useState(row?.include_prior_savings !== false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
@@ -47,6 +49,7 @@ export function BudgetPage() {
     const b = budgets.find((x) => x.year_month === ym)
     setStarting(b?.starting_balance_ngn ? String(b.starting_balance_ngn) : '')
     setExpected(b?.amount_ngn ? String(b.amount_ngn) : '')
+    setIncludePrior(b?.include_prior_savings !== false)
     setIncDate(defaultDateInMonth(ym))
     setMessage('')
     setError('')
@@ -56,13 +59,14 @@ export function BudgetPage() {
 
   const startingN = Math.round(Number(String(starting).replace(/,/g, ''))) || 0
   const expectedN = Math.round(Number(String(expected).replace(/,/g, ''))) || 0
+  const appliedCarry = includePrior ? priorAvailable : 0
   const totalIn = live.income
   const plannedNet =
     (Number.isFinite(startingN) && startingN >= 0 ? startingN : 0) +
     live.incomeAdded -
     (Number.isFinite(expectedN) && expectedN >= 0 ? expectedN : 0) +
-    carryIn
-  const liveNet = totalIn - live.spent + carryIn
+    appliedCarry
+  const liveNet = totalIn - live.spent + appliedCarry
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -76,7 +80,7 @@ export function BudgetPage() {
     }
     setBusy(true)
     try {
-      await setBudget(ym, exp, start)
+      await setBudget(ym, exp, start, includePrior)
       setMessage(`Saved plan for ${formatYearMonth(ym)}`)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save')
@@ -180,6 +184,30 @@ export function BudgetPage() {
           <span className="hint">Spending ceiling — overspend is tracked against this only</span>
         </div>
 
+        {priorAvailable > 0 && (
+          <label
+            className="field"
+            htmlFor="include-prior"
+            style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, cursor: 'pointer' }}
+          >
+            <input
+              id="include-prior"
+              type="checkbox"
+              checked={includePrior}
+              onChange={(e) => setIncludePrior(e.target.checked)}
+              style={{ marginTop: 4, width: 18, height: 18 }}
+            />
+            <span>
+              <strong>Include last month&apos;s unused budget in net</strong>
+              <span className="hint" style={{ display: 'block', marginTop: 4 }}>
+                {includePrior
+                  ? `${formatNaira(priorAvailable)} from last month will count toward this month's net.`
+                  : `${formatNaira(priorAvailable)} available — turn this on to include it, or leave off to start fresh.`}
+              </span>
+            </span>
+          </label>
+        )}
+
         <div className="stat-grid">
           <div className="stat-card">
             <h3>Total in</h3>
@@ -199,10 +227,15 @@ export function BudgetPage() {
           </div>
         </div>
 
-        {carryIn > 0 && (
+        {priorAvailable > 0 && includePrior && (
           <p className="hint" style={{ margin: 0 }}>
-            Saved from last month: <strong>{formatNaira(carryIn)}</strong> — added to net, not
-            expected spend
+            Including <strong>{formatNaira(carryIn)}</strong> saved from last month in net (not in
+            expected spend)
+          </p>
+        )}
+        {priorAvailable > 0 && !includePrior && (
+          <p className="hint" style={{ margin: 0 }}>
+            Not including <strong>{formatNaira(priorAvailable)}</strong> from last month
           </p>
         )}
 

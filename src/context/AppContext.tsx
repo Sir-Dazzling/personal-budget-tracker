@@ -53,7 +53,12 @@ interface AppData {
   signOut: () => Promise<void>
   createHousehold: (name: string, displayName: string) => Promise<void>
   joinHousehold: (code: string, displayName: string) => Promise<void>
-  setBudget: (yearMonth: string, expectedExpenses: number, startingBalance: number) => Promise<void>
+  setBudget: (
+    yearMonth: string,
+    expectedExpenses: number,
+    startingBalance: number,
+    includePriorSavings?: boolean,
+  ) => Promise<void>
   addIncome: (input: {
     amount_ngn: number
     note: string
@@ -117,6 +122,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...b,
         income_ngn: b.income_ngn ?? 0,
         starting_balance_ngn: b.starting_balance_ngn ?? 0,
+        include_prior_savings: b.include_prior_savings !== false,
       })),
     )
     setExpenses(s.expenses)
@@ -165,6 +171,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         ...b,
         income_ngn: b.income_ngn ?? 0,
         starting_balance_ngn: b.starting_balance_ngn ?? 0,
+        include_prior_savings: b.include_prior_savings !== false,
       })) ?? [],
     )
     setExpenses((exps as Expense[]) ?? [])
@@ -411,6 +418,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
             amount_ngn: 200_000,
             income_ngn: 0,
             starting_balance_ngn: 0,
+            include_prior_savings: true,
           },
           { onConflict: 'household_id,year_month' },
         )
@@ -439,9 +447,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   )
 
   const setBudget = useCallback(
-    async (yearMonth: string, expectedExpenses: number, startingBalance: number) => {
+    async (
+      yearMonth: string,
+      expectedExpenses: number,
+      startingBalance: number,
+      includePriorSavings = true,
+    ) => {
       if (!cloud || !supabase) {
-        localUpsertBudget(yearMonth, expectedExpenses, startingBalance)
+        localUpsertBudget(yearMonth, expectedExpenses, startingBalance, includePriorSavings)
         applyLocal()
         return
       }
@@ -452,6 +465,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           year_month: yearMonth,
           amount_ngn: expectedExpenses,
           starting_balance_ngn: startingBalance,
+          include_prior_savings: includePriorSavings,
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'household_id,year_month' },

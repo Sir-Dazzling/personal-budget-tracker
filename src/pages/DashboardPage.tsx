@@ -100,7 +100,9 @@ export function DashboardPage() {
             {formatNaira(summary.spent)}
             {summary.carryover > 0
               ? ` · ${formatNaira(summary.carryover)} saved from last month (in net)`
-              : ''}
+              : !summary.includePriorSavings
+                ? ' · Prior-month savings excluded'
+                : ''}
           </p>
           <div className="progress" style={{ background: 'var(--bg-deep)', marginTop: 0 }}>
             <span

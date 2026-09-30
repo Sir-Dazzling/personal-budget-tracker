@@ -40,6 +40,11 @@ export interface MonthlyBudget {
   income_ngn: number
   /** Cash on hand at the start of the month. */
   starting_balance_ngn: number
+  /**
+   * When true (default), unused expected from last month is added to this month's net.
+   * Turn off to start fresh without past-month savings.
+   */
+  include_prior_savings: boolean
 }
 
 export interface IncomeEntry {
@@ -80,8 +85,10 @@ export interface MonthSummary {
   netIncome: number
   /** income − expected expenses + prior-month savings (planned leftover). */
   plannedNet: number
-  /** Unused expected from the previous month — adds to net, not the spend ceiling. */
+  /** Unused expected from the previous month — adds to net when include_prior_savings is on. */
   carryover: number
+  /** Whether this month includes prior savings in net. */
+  includePriorSavings: boolean
   /** Same as budget — spend ceiling for remaining / pace / status (no carryover). */
   totalAvailable: number
   spent: number

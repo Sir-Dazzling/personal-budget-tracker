@@ -49,6 +49,7 @@ function normalizeBudget(b: MonthlyBudget): MonthlyBudget {
     ...b,
     income_ngn: b.income_ngn ?? 0,
     starting_balance_ngn: b.starting_balance_ngn ?? 0,
+    include_prior_savings: b.include_prior_savings !== false,
   }
 }
 
@@ -231,6 +232,7 @@ export function localCreateHousehold(name: string, displayName: string): LocalSt
       amount_ngn: 200_000,
       income_ngn: 0,
       starting_balance_ngn: 0,
+      include_prior_savings: true,
     },
   ]
   state.expenses = []
@@ -270,6 +272,7 @@ export function localUpsertBudget(
   yearMonth: string,
   amount: number,
   startingBalance: number,
+  includePriorSavings = true,
 ): LocalState {
   const state = loadLocal()
   if (!state.household) throw new Error('No household')
@@ -279,6 +282,7 @@ export function localUpsertBudget(
   if (existing) {
     existing.amount_ngn = amount
     existing.starting_balance_ngn = startingBalance
+    existing.include_prior_savings = includePriorSavings
   } else {
     state.budgets.push({
       id: uid(),
@@ -287,6 +291,7 @@ export function localUpsertBudget(
       amount_ngn: amount,
       income_ngn: 0,
       starting_balance_ngn: startingBalance,
+      include_prior_savings: includePriorSavings,
     })
   }
   saveLocal(state)

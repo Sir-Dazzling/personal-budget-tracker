@@ -42,6 +42,7 @@ create table public.monthly_budgets (
   amount_ngn bigint not null check (amount_ngn >= 0),
   income_ngn bigint not null default 0 check (income_ngn >= 0),
   starting_balance_ngn bigint not null default 0 check (starting_balance_ngn >= 0),
+  include_prior_savings boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   unique (household_id, year_month)
